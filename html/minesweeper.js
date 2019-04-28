@@ -537,6 +537,13 @@ class Gui {
 		}
 	}
 
+	apply() {
+		this.tile_size = parseInt(document.getElementById("tile_size").value, 10);
+		this.resize();
+		this.load_images().then(() => {window.requestAnimationFrame(() => this.render_region());})
+		
+	}
+
 	on_key(event) {
 		if (event.keyCode == 82) {
 			this.reset();
@@ -598,4 +605,8 @@ conn.addEventListener('message', recieve_data);
 
 function reset() {
 	gui.reset();
+}
+
+function apply() {
+	gui.apply()
 }
