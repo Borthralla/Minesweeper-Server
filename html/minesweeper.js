@@ -19,6 +19,8 @@ class Board {
 		this.bombs_left = this.num_bombs;
 		this.tiles_left = this.width * this.height - this.num_bombs;
 		this.init_tiles();
+		this.reveal_history = []
+
 	}
 
 	init_tiles() {
@@ -57,6 +59,17 @@ class Board {
 			indices.push(i);
 		}
 		shuffle(indices);
+		for (var i = 0; i < this.num_bombs; i++) {
+			var index = indices[i];
+			var tile = this.tiles[index];
+			tile.make_bomb();
+			for (var tile of this.radius(index)) {
+				tile.number += 1;
+			}
+		}
+	}
+
+	assign_bombs_with_indices(indices) {
 		for (var i = 0; i < this.num_bombs; i++) {
 			var index = indices[i];
 			var tile = this.tiles[index];
@@ -122,6 +135,7 @@ class Board {
 			return;
 		}
 		revealed_tile.reveal();
+		this.reveal_history.push(index)
 		if (revealed_tile.is_bomb) {
 			this.status = "lose";
 			this.bombs_left -= 1;
@@ -151,6 +165,7 @@ class Board {
 								to_reveal.push(tile);
 							}
 							tile.reveal();
+							this.reveal_history.push(tile.index)
 							this.tiles_left -= 1;
 						}
 					}
@@ -159,55 +174,7 @@ class Board {
 		}
 	}
 
-	reveal_and_draw(index, ctx, tile_size, colors) {
-		var revealed_tile = this.tiles[index];
-		if (!revealed_tile.is_covered || revealed_tile.is_flagged) {
-			return;
-		}
-		revealed_tile.reveal();
-		if (revealed_tile.is_bomb) {
-			this.status = "lose";
-			this.bombs_left -= 1;
-			var x = (index % this.width) * tile_size;
-			var y = Math.floor(index / this.width) * tile_size;
-			this.draw_tile(revealed_tile, ctx, tile_size, x, y, colors)
-			return;
-		}
-		else {
-			var x = (index % this.width) * tile_size;
-			var y = Math.floor(index / this.width) * tile_size;
-			this.tiles_left -= 1;
-			this.draw_number(revealed_tile, ctx, tile_size, x, y, colors)
-		}
-		if (revealed_tile.number == 0) {
-			var to_reveal = [revealed_tile]
-			while(to_reveal.length > 0) {
-				// I rewrote radius here because SPEED IS EVERYTHING, COPYPASTA IS EVERYTHING
-				var next = to_reveal.pop();
-				var next_index = next.index;
-				var col = next_index % this.width;
-				var row = Math.floor(next_index / this.width);
-				var first_row = Math.max(0, row - 1);
-				var last_row = Math.min(this.height - 1, row + 1);		
-				var first_col = Math.max(0, col - 1);
-				var last_col = Math.min(this.width - 1, col + 1);
-				for (var r = first_row; r <= last_row; r++) {
-					for (var c = first_col; c <= last_col; c++) {
-						var i = this.width * r + c;
-						var tile = this.tiles[i]
-						if (tile.is_covered && !tile.is_flagged) {
-							if (tile.number == 0) {
-								to_reveal.push(tile);
-							}
-							tile.reveal();
-							this.draw_number(tile, ctx, tile_size, c * tile_size, r * tile_size, colors)
-							this.tiles_left -= 1;
-						}
-					}
-				} 
-			}
-		}
-	}
+	
 
 	chord(index) {
 		var chord_tile = this.tiles[index];
@@ -247,43 +214,7 @@ class Board {
 		}
 	}
 
-	chord_and_draw(index, ctx, tile_size, colors) {
-		var chord_tile = this.tiles[index];
-		if (chord_tile.is_covered || chord_tile.is_bomb) {
-			return;
-		}
-		var col = index % this.width;
-		var row = Math.floor(index / this.width);
-
-		var first_row = Math.max(0, row - 1);
-		var last_row = Math.min(this.height - 1, row + 1);
-
-		var first_col = Math.max(0, col - 1);
-		var last_col = Math.min(this.width - 1, col + 1);
-
-		var to_reveal = []
-		var num_flagged = 0;
-
-		for (var r = first_row; r <= last_row; r++) {
-			for (var c = first_col; c <= last_col; c++) {
-				var i = this.width * r + c;
-				if (i != index) {
-					var tile = this.tiles[i];
-					if (tile.is_flagged || (tile.is_bomb && !tile.is_covered)) {
-						num_flagged += 1;
-					}
-					else if (tile.is_covered) {
-						to_reveal.push(tile);
-					}
-				}
-			}
-		}
-		if (num_flagged == chord_tile.number) {
-			for (var tile of to_reveal) {
-				this.reveal_and_draw(tile.index, ctx, tile_size, colors);
-			}
-		}
-	}
+	
 
 	flag(index) {
 		var tile = this.tiles[index];
@@ -300,23 +231,7 @@ class Board {
 		}
 	}
 
-	flag_and_draw(index, ctx, tile_size, colors) {
-		var tile = this.tiles[index];
-		if (!tile.is_covered) {
-			return;
-		}
-		if (tile.is_flagged) {
-			tile.unflag();
-			this.bombs_left += 1;
-		}
-		else {
-			tile.flag();
-			this.bombs_left -= 1;
-		}
-		var x = tile_size * (index % this.width);
-		var y = tile_size * Math.floor(index / this.width);
-		this.draw_tile(this.tiles[index], ctx, tile_size, x, y, colors)
-	}
+	
 
 	toString() {
 		var result = "";
@@ -429,11 +344,11 @@ class Tile {
 class Gui {
 	constructor() {
 		this.canvas = document.getElementById("myCanvas");
-		var width = parseInt(document.getElementById("width").value, 10);
-		var height = parseInt(document.getElementById("height").value, 10);
-		var num_bombs = parseInt(document.getElementById("num_bombs").value, 10);
+		var width = 0;
+		var height = 0;
+		var num_bombs = 0;
 		var tile_size = parseInt(document.getElementById("tile_size").value, 10);
-		this.board = new Board(width, height, num_bombs);
+		//this.board = new Board(width, height, num_bombs);
 		this.tile_size = tile_size;
 		this.first_click = true;
 		this.current_x = 0;
@@ -448,7 +363,19 @@ class Gui {
 		this.resize();
 		this.cursor_x = 0;
 		this.cursor_y = 0;
+		this.reveal_index = 0;
 	}
+
+	async load_board() {
+		var json_data = await fetch("/board")
+		var board_data = await json_data.json()
+		console.log(board_data)
+		this.width = board_data["Width"]
+		this.height = board_data["Height"]
+		this.num_bombs = board_data["Bombs"].length
+		this.board = new Board(this.width, this.height, this.num_bombs)
+		this.board.assign_bombs_with_indices(board_data["Bombs"])
+	} 
 
 	load_image(image_path) {
 		const image = new Image();
@@ -480,6 +407,11 @@ class Gui {
 		images.push(await this.load_image("images/facingDown.png"))
 		images.push(await this.load_image("images/flagged.png"))
 		this.colors = images;
+	}
+
+	async load_board_and_images() {
+		await this.load_board()
+		await this.load_images()
 	}
 
 	resize() {
@@ -530,7 +462,7 @@ class Gui {
 					return;
 				}
 				if (this.first_click) {
-					this.board.assign_bombs_with_zero(index);
+					///this.board.assign_bombs_with_zero(index);
 					this.start = new Date();
 					this.first_click = false;
 				}
@@ -628,19 +560,40 @@ class Gui {
 		window.requestAnimationFrame(() => this.render_region());
 	}
 
-	send_position(conn) {
-		conn.send(new Uint32Array([this.cursor_x, this.cursor_y]))
+	send_data(conn) {
+		var reveal_delta = this.board.reveal_history.length - this.reveal_index
+		if (reveal_delta > 0) {
+			var message = new Uint32Array(reveal_delta)
+			for (var i = this.reveal_index; i < this.board.reveal_history.length; i++) {
+				message[i - this.reveal_index] = (this.board.reveal_history[i])
+			}
+			conn.send(message)
+			this.reveal_index = this.board.reveal_history.length;
+		}
 	}
+
 }
 
 var gui = new Gui();
-gui.load_images().then(() => {gui.render_region() })
+gui.load_board_and_images().then(() => {gui.render_region() })
 document.addEventListener("mousedown", (event) => gui.on_click(event));
 document.addEventListener("keydown", (event) => gui.on_key(event));
 document.addEventListener("mouseup", (event) => gui.on_mouse_up(event))
 document.addEventListener("mousemove", (event) => gui.on_mouse_move(event))
 var conn = new WebSocket("ws://" + document.location.host + "/ws");
-setInterval(() => { gui.send_position(conn) }, 1000)
+conn.binaryType = "arraybuffer";
+setInterval(() => { gui.send_data(conn) }, 100)
+function recieve_data(event) {
+	var indices = new Uint32Array(event.data)
+	console.log(indices.length)
+	for (var i = 0; i < indices.length; i++) {
+		var index = indices[i]
+		gui.board.tiles[index].reveal()
+	}
+	window.requestAnimationFrame(() => gui.render_region());
+}
+conn.addEventListener('message', recieve_data);
+
 
 
 function reset() {
