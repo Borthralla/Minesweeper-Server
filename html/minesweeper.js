@@ -581,25 +581,31 @@ class Gui {
 
 }
 
+
+
 var gui = new Gui();
-gui.load_board_and_images().then(() => {gui.render_region() })
-document.addEventListener("mousedown", (event) => gui.on_click(event));
-document.addEventListener("keydown", (event) => gui.on_key(event));
-document.addEventListener("mouseup", (event) => gui.on_mouse_up(event))
-document.addEventListener("mousemove", (event) => gui.on_mouse_move(event))
-var conn = new WebSocket("ws://" + document.location.host + "/ws");
-conn.binaryType = "arraybuffer";
-setInterval(() => { gui.send_data(conn) }, 100)
-function recieve_data(event) {
-	var indices = new Uint32Array(event.data)
-	console.log(indices.length)
-	for (var i = 0; i < indices.length; i++) {
-		var index = indices[i]
-		gui.board.tiles[index].reveal()
+function start_listening() {
+	document.addEventListener("mousedown", (event) => gui.on_click(event));
+	document.addEventListener("keydown", (event) => gui.on_key(event));
+	document.addEventListener("mouseup", (event) => gui.on_mouse_up(event))
+	document.addEventListener("mousemove", (event) => gui.on_mouse_move(event))
+	var conn = new WebSocket("ws://" + document.location.host + "/ws");
+	conn.binaryType = "arraybuffer";
+	setInterval(() => { gui.send_data(conn) }, 100)
+	function recieve_data(event) {
+		var indices = new Uint32Array(event.data)
+		console.log(indices.length)
+		for (var i = 0; i < indices.length; i++) {
+			var index = indices[i]
+			gui.board.tiles[index].reveal()
+		}
+		window.requestAnimationFrame(() => gui.render_region());
 	}
-	window.requestAnimationFrame(() => gui.render_region());
+	conn.addEventListener('message', recieve_data);
+	gui.render_region()	
 }
-conn.addEventListener('message', recieve_data);
+gui.load_board_and_images().then(() => { start_listening() })
+
 
 
 
