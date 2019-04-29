@@ -32,6 +32,7 @@ type Board struct {
 }
 
 func make_board(width int32, height int32, num_bombs int32) Board {
+	rand.Seed(time.Now().UTC().UnixNano())
 	indicies := make([]int32, width * height)
 	for i := int32(0); i < int32(len(indicies)); i++ {
      		 indicies[i] = i
@@ -123,7 +124,6 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	player_index := <-player_count
 	fmt.Printf("New player index %d\n", player_index)
 	player_count <- player_index + 1
-	fmt.Printf("Done with player counts")
 
 	go read_reveals(conn, player_index);
 	go send_reveals(conn, player_index);
@@ -137,7 +137,6 @@ func serveBoard(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	rand.Seed(time.Now().UTC().UnixNano())
 	player_count <- int16(0)
 	http.Handle("/", http.FileServer(http.Dir("./html")))
 	http.HandleFunc("/ws", serveWs)
