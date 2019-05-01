@@ -20,6 +20,7 @@ class Board {
 		this.tiles_left = this.width * this.height - this.num_bombs;
 		this.init_tiles();
 		this.reveal_history = []
+		this.flag_history = []
 
 	}
 
@@ -227,6 +228,9 @@ class Board {
 		}
 		else {
 			tile.flag();
+			if (tile.is_bomb) {
+				this.flag_history.push(tile.index)
+			}
 			this.bombs_left -= 1;
 		}
 	}
@@ -364,12 +368,12 @@ class Gui {
 		this.cursor_x = 0;
 		this.cursor_y = 0;
 		this.reveal_index = 0;
+		this.flag_index = 0;
 	}
 
 	async load_board() {
 		var json_data = await fetch("/board")
 		var board_data = await json_data.json()
-		console.log(board_data)
 		this.width = board_data["Width"]
 		this.height = board_data["Height"]
 		this.num_bombs = board_data["Bombs"].length
@@ -569,13 +573,19 @@ class Gui {
 
 	send_data(conn) {
 		var reveal_delta = this.board.reveal_history.length - this.reveal_index
-		if (reveal_delta > 0) {
-			var message = new Uint32Array(reveal_delta)
+		var flag_delta = this.board.flag_history.length - this.flag_index
+		if (reveal_delta + flag_delta > 0) {
+			var message = new Uint32Array(reveal_delta + flag_delta + 1)
 			for (var i = this.reveal_index; i < this.board.reveal_history.length; i++) {
 				message[i - this.reveal_index] = (this.board.reveal_history[i])
 			}
+			message[reveal_delta] = 1000000000
+			for (var i = this.flag_index; i < this.board.flag_history.length; i++) {
+				message[i - this.flag_index + reveal_delta + 1] = (this.board.flag_history[i])
+			}
 			conn.send(message)
 			this.reveal_index = this.board.reveal_history.length;
+			this.flag_index = this.board.flag_history.length;
 		}
 	}
 
@@ -595,9 +605,19 @@ function start_listening() {
 	function recieve_data(event) {
 		var indices = new Uint32Array(event.data)
 		console.log(indices.length)
+		var flag = false
 		for (var i = 0; i < indices.length; i++) {
 			var index = indices[i]
-			gui.board.tiles[index].reveal()
+			if (index == 1000000000) {
+				flag = true
+				continue
+			}
+			if (flag) {
+				gui.board.tiles[index].is_flagged = true
+			}
+			else {
+				gui.board.tiles[index].reveal()
+			}
 		}
 		window.requestAnimationFrame(() => gui.render_region());
 	}

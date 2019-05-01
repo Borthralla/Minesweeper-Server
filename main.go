@@ -28,6 +28,7 @@ type Board struct {
 	Height int32
 	Bombs []int32
 	revealed_history []Board_Event
+	flag_history []Board_Event
 
 }
 
@@ -45,7 +46,7 @@ func make_board(width int32, height int32, num_bombs int32) Board {
 
 	//fmt.Printf("%d\n", bombs)
 
-	var board = Board{width, height, bombs, make([]Board_Event, 0, width * height * 2)}
+	var board = Board{width, height, bombs, make([]Board_Event, 0, width * height * 2), make([]Board_Event, 0, width * height / 2)}
 	return board
 }
 
@@ -75,13 +76,21 @@ func read_reveals(conn *websocket.Conn, player_index int16) {
 
 		buffer := bytes.NewReader(message);
 		mutex.Lock()
+		flags := false
 		for {
 			var index int32
 			err := binary.Read(buffer, binary.LittleEndian, &index)
 			if err != nil {
 				break
+			} else if index == int32(1000000000) {
+				flags = true
+				continue
 			} else {
-				board.revealed_history = append(board.revealed_history, Board_Event{index, player_index})
+				if flags {
+					board.flag_history = append(board.flag_history, Board_Event{index, player_index})
+				} else {
+					board.revealed_history = append(board.revealed_history, Board_Event{index, player_index})
+				}
 			}
 		}
 		mutex.Unlock()
@@ -92,11 +101,14 @@ func send_reveals(conn *websocket.Conn, player_index int16) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	var reveal_index = 0
+	var flag_index = 0
 	for {
 		<- ticker.C
 		reveal_total := len(board.revealed_history)
 		reveal_delta := reveal_total - reveal_index
-		if (reveal_delta > 0) {
+		flag_total := len(board.flag_history)
+		flag_delta := flag_total - flag_index
+		if (reveal_delta + flag_delta > 0) {
 			message, err := conn.NextWriter(websocket.BinaryMessage)
 			if err != nil {
 				return
@@ -107,10 +119,18 @@ func send_reveals(conn *websocket.Conn, player_index int16) {
 					binary.Write(message, binary.LittleEndian, reveal_entry.Index)
 				}
 			}
+			binary.Write(message, binary.LittleEndian, int32(1000000000))
+			for i := flag_index; i < flag_total; i++ {
+				var flag_entry = board.flag_history[i]
+				if (flag_entry.Player != player_index) {
+					binary.Write(message, binary.LittleEndian, flag_entry.Index)
+				}
+			}
 			if err := message.Close(); err != nil {
 				return
 			}
 			reveal_index = reveal_total
+			flag_index = flag_total
 		}
 	}
 }
