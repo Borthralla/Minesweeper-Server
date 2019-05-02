@@ -161,7 +161,7 @@ func main() {
 	http.Handle("/", http.FileServer(http.Dir("./html")))
 	http.HandleFunc("/ws", serveWs)
 	http.HandleFunc("/board", serveBoard)
-	err := http.ListenAndServe(":8080", nil)
+	err := http.ListenAndServe(":80", nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
