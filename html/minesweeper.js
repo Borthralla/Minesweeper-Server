@@ -549,8 +549,8 @@ class Gui {
 	}
 
 	on_key(event) {
-		if (event.keyCode == 82) {
-			this.reset();
+		if (event.keyCode == 16) {
+			return;
 		}
 		else if (event.keyCode == 65) {
 			var new_x = this.current_x - 5 * this.tile_size;
