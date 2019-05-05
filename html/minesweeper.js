@@ -392,7 +392,7 @@ class Minimap {
 		if (region_count == this.tiles_per_region) {
 			return "#808080"
 		}
-		else if (region_count == 0) {
+		else if (region_count <= 0) {
 			return "#00ff00"
 		}
 		else {
@@ -401,9 +401,11 @@ class Minimap {
 	}
 
 	on_click(event) {
-		console.log("I was called...")
-		this.dragging = true
-		this.change_position(event)
+		var in_bounds = this.change_position(event)
+		if (in_bounds) {
+			this.dragging = true
+		}
+		return in_bounds
 	}
 
 	on_mouse_move(event) {
@@ -417,14 +419,14 @@ class Minimap {
 
 	change_position(event) {
 		var rect = this.canvas.getBoundingClientRect();
-    	var x = event.clientX - rect.left
-    	var y = event.clientY - rect.top 
-    	if (x < 0 || x >= this.width || y < 0 || y >= this.height) {
-    		return
+    	var x = event.clientX - rect.left - Math.floor(this.gui.window_width / (2 * this.region_width))
+    	var y = event.clientY - rect.top - Math.floor(this.gui.window_height / (2 * this.region_height))
+    	if (x < -1 || x >= this.width || y < -1 || y >= this.height) {
+    		return false
     	}
-    	this.gui.current_x = this.gui.tile_size * this.region_width * x
-    	this.gui.current_y = this.gui.tile_size * this.region_height * y
-    	window.requestAnimationFrame(() => this.gui.render_region());
+
+    	this.gui.update_position(this.gui.tile_size * this.region_width * x, this.gui.tile_size * this.region_height * y)
+    	return true
 	}
 
 	draw_region(region_index) {
@@ -557,7 +559,9 @@ class Gui {
     	var y = event.clientY - rect.top + this.current_y;
 		var row = Math.floor(y / this.tile_size);
 		var col = Math.floor(x / this.tile_size);
-		this.minimap.on_click(event)
+		if (this.minimap.on_click(event)) {
+			return;
+		}
 		if (row >= this.board.height || row < 0 || col >= this.board.width || col < 0) {
 			return;
 		}
@@ -621,10 +625,24 @@ class Gui {
 	}
 
 	update_position(new_x, new_y) {
-		if (new_x >= 0 && new_x <= this.tile_size * (this.board.width - this.window_width)) {
-			this.current_x = new_x;
+		var x_max = this.tile_size * (this.board.width - this.window_width)
+		var y_max = this.tile_size * (this.board.height - this.window_height)
+		if (new_x <= 0) {
+			this.current_x = 0
 		}
-		if (new_y >= 0 && new_y <= this.tile_size * (this.board.height - this.window_height)) {
+		else if (new_x >= x_max) {
+			this.current_x = x_max
+		}
+		else {
+			this.current_x = new_x
+		}
+		if (new_y <= 0) {
+			this.current_y = 0
+		}
+		else if (new_y >= y_max) {
+			this.current_y = y_max
+		}
+		else {
 			this.current_y = new_y
 		}
 		window.requestAnimationFrame(() => this.render_region());
