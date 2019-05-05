@@ -746,12 +746,18 @@ function start_listening() {
 				continue
 			}
 			if (flag) {
-				gui.board.tiles[index].is_flagged = true
-				gui.minimap.update_region(index)
+				var tile = gui.board.tiles[index]
+				if (!tile.is_flagged) {
+					tile.is_flagged = true
+					gui.minimap.update_region(index)
+				}
 			}
 			else {
-				gui.board.tiles[index].reveal()
-				gui.minimap.update_region(index)
+				var tile = gui.board.tiles[index]
+				if (tile.is_covered) {
+					tile.reveal()
+					gui.minimap.update_region(index)
+				}
 			}
 		}
 		window.requestAnimationFrame(() => gui.render_region());
