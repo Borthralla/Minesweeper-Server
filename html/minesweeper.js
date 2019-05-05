@@ -362,6 +362,7 @@ class Minimap {
 		this.region_counts = []
 		this.init_counts()
 		this.init_background_minimap()
+		this.dragging = false
 		
 	}
 
@@ -397,6 +398,33 @@ class Minimap {
 		else {
 			return "#ffff00"
 		}
+	}
+
+	on_click(event) {
+		console.log("I was called...")
+		this.dragging = true
+		this.change_position(event)
+	}
+
+	on_mouse_move(event) {
+		if (!this.dragging) {
+			return false
+		} 
+		else {
+			this.change_position(event)
+		}
+	}
+
+	change_position(event) {
+		var rect = this.canvas.getBoundingClientRect();
+    	var x = event.clientX - rect.left
+    	var y = event.clientY - rect.top 
+    	if (x < 0 || x >= this.width || y < 0 || y >= this.height) {
+    		return
+    	}
+    	this.gui.current_x = this.gui.tile_size * this.region_width * x
+    	this.gui.current_y = this.gui.tile_size * this.region_height * y
+    	window.requestAnimationFrame(() => this.gui.render_region());
 	}
 
 	draw_region(region_index) {
@@ -529,6 +557,7 @@ class Gui {
     	var y = event.clientY - rect.top + this.current_y;
 		var row = Math.floor(y / this.tile_size);
 		var col = Math.floor(x / this.tile_size);
+		this.minimap.on_click(event)
 		if (row >= this.board.height || row < 0 || col >= this.board.width || col < 0) {
 			return;
 		}
@@ -574,12 +603,14 @@ class Gui {
 
 	on_mouse_up(event) {
 		this.is_dragging = false;
+		this.minimap.dragging = false
 	}
 
 	on_mouse_move(event) {
 		this.cursor_x = event.x;
 		this.cursor_y = event.y;
 		if (!this.is_dragging) {
+			this.minimap.on_mouse_move(event)
 			return;
 		}
 		var dx =  this.anchor_x - event.x;
