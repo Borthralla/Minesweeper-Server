@@ -705,7 +705,7 @@ class Gui {
 	send_data(conn) {
 		var reveal_delta = this.board.reveal_history.length - this.reveal_index
 		var flag_delta = this.board.flag_history.length - this.flag_index
-		if (reveal_delta + flag_delta > 0) {
+		if (reveal_delta + flag_delta > 0 && reveal_delta + flag_delta < 3000) {
 			var message = new Uint32Array(reveal_delta + flag_delta + 1)
 			for (var i = this.reveal_index; i < this.board.reveal_history.length; i++) {
 				message[i - this.reveal_index] = (this.board.reveal_history[i])
