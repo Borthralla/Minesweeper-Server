@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <title>Mega Minesweeper</title>
 </head>
-<body>
+<body ondragstart="return false;" ondrop="return false;">
 <label for="tile_size"> tile size </label>
 
 <textarea id="tile_size" name="tile_size" rows="1" colrs="3">35</textarea>
-<button onclick="apply()">apply</button>
-<br>
+<button onclick="apply()">apply</button><br>
 <canvas id="myCanvas" width="1920" height="1080" oncontextmenu="return false"></canvas>
+<canvas id="minimap" width="250" height="250" oncontextmenu="return false"></canvas>
 
 <script src="minesweeper.js"></script>
 

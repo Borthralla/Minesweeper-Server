@@ -345,6 +345,86 @@ class Tile {
 	}
 }
 
+class Minimap {
+	constructor(gui) {
+		this.gui = gui
+		this.board = this.gui.board
+		this.width = 250
+		this.height = 250
+		this.canvas = document.getElementById("minimap")
+		this.background_minimap = document.createElement('canvas');
+		this.background_minimap.width = 250
+		this.background_minimap.height = 250
+		this.background_minimap_ctx = this.background_minimap.getContext("2d");
+		this.region_width = Math.floor(this.board.width / this.width)
+		this.region_height = Math.floor(this.board.height / this.height)
+		this.tiles_per_region =  this.region_width * this.region_height
+		this.region_counts = []
+		this.init_counts()
+		this.init_background_minimap()
+		
+	}
+
+	init_counts() {
+		for (var r = 0; r < this.height; r++) {
+			for (var c = 0; c < this.width; c++) {
+				this.region_counts.push(this.tiles_per_region)
+			}
+		}
+	}
+
+	get_region_index(tile_index) {
+		var x = Math.floor(tile_index % this.board.width)
+		var y = Math.floor(tile_index / this.board.height)
+		var region_x = Math.floor(x / this.region_width)
+		var region_y = Math.floor(y / this.region_height)
+		return region_y * this.width + region_x
+	}
+
+	update_region(tile_index) {
+		var region_index = this.get_region_index(tile_index)
+		this.region_counts[region_index] -= 1
+		this.draw_region(region_index)
+	}
+
+	get_color(region_count) {		
+		if (region_count == this.tiles_per_region) {
+			return "#808080"
+		}
+		else if (region_count == 0) {
+			return "#00ff00"
+		}
+		else {
+			return "#ffff00"
+		}
+	}
+
+	draw_region(region_index) {
+		var region_count = this.region_counts[region_index]
+		var region_x = Math.floor(region_index % this.width)
+		var region_y = Math.floor(region_index / this.width)
+		this.background_minimap_ctx.fillStyle = this.get_color(region_count)
+
+		this.background_minimap_ctx.fillRect(region_x, region_y, 1, 1)
+	}
+
+	init_background_minimap() {
+		this.background_minimap_ctx.fillStyle = "#808080"
+		this.background_minimap_ctx.fillRect(0,0,this.width,this.height)
+	}
+
+	render() {
+		var ctx = this.canvas.getContext("2d");
+		ctx.drawImage(this.background_minimap, 0, 0)
+		var mini_pos_x = Math.floor(this.gui.current_x / (this.region_width * this.gui.tile_size))
+		var mini_pos_y = Math.floor(this.gui.current_y / ( this.region_height * this.gui.tile_size))
+		var mini_width_length = Math.floor(this.gui.window_width / this.region_width)
+		var mini_height_length = Math.floor(this.gui.window_height / this.region_height)
+		ctx.strokeStyle = "#ff0000"
+		ctx.strokeRect(mini_pos_x, mini_pos_y, mini_width_length, mini_height_length)
+	}
+}
+
 class Gui {
 	constructor() {
 		this.canvas = document.getElementById("myCanvas");
@@ -379,6 +459,7 @@ class Gui {
 		this.num_bombs = board_data["Bombs"].length
 		this.board = new Board(this.width, this.height, this.num_bombs)
 		this.board.assign_bombs_with_indices(board_data["Bombs"])
+		this.minimap = new Minimap(this)
 	} 
 
 	load_image(image_path) {
@@ -439,6 +520,7 @@ class Gui {
 		var height_to_draw = this.current_y >= this.tile_size * (this.board.height - this.window_height) ? this.window_height : this.window_height + 1;
 
 		this.board.render_region(ctx, this.tile_size, this.colors, row, col, width_to_draw, height_to_draw, x, y)
+		this.minimap.render()
 	}
 
 	on_click(event) {
@@ -578,10 +660,12 @@ class Gui {
 			var message = new Uint32Array(reveal_delta + flag_delta + 1)
 			for (var i = this.reveal_index; i < this.board.reveal_history.length; i++) {
 				message[i - this.reveal_index] = (this.board.reveal_history[i])
+				this.minimap.update_region(this.board.reveal_history[i])
 			}
 			message[reveal_delta] = 1000000000
 			for (var i = this.flag_index; i < this.board.flag_history.length; i++) {
 				message[i - this.flag_index + reveal_delta + 1] = (this.board.flag_history[i])
+				this.minimap.update_region(this.board.flag_history[i])
 			}
 			conn.send(message)
 			this.reveal_index = this.board.reveal_history.length;
@@ -614,9 +698,11 @@ function start_listening() {
 			}
 			if (flag) {
 				gui.board.tiles[index].is_flagged = true
+				gui.minimap.update_region(index)
 			}
 			else {
 				gui.board.tiles[index].reveal()
+				gui.minimap.update_region(index)
 			}
 		}
 		window.requestAnimationFrame(() => gui.render_region());
