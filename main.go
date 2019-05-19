@@ -58,7 +58,7 @@ func get_board_json(board Board) []byte {
 	return b
 }
 
-var board = make_board(1000,1000,150000)
+var board = make_board(500,500,50000)
 var board_json = get_board_json(board)
 var player_count = make(chan int16, 1)
 var mutex = &sync.Mutex{}
