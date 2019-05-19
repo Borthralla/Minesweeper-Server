@@ -569,9 +569,9 @@ class Gui {
 			var ctx = this.canvas.getContext("2d", { alpha: false });
 			var button = event.which
 			var index = row * this.board.width + col
-			if (button == 1) {
+			if (button == 1 || button == 2) {
 				var clicked_tile = this.board.tiles[index];
-				if (event.shiftKey || (!clicked_tile.is_covered && clicked_tile.number == 0)) {
+				if (event.shiftKey || button == 2 || (!clicked_tile.is_covered && clicked_tile.number == 0)) {
 					this.is_dragging = true;
 					this.anchor_x = event.x;
 					this.anchor_y = event.y;
