@@ -719,9 +719,15 @@ class Gui {
 		if (reveal_delta + flag_delta > 0 && reveal_delta + flag_delta < 3000) {
 			var message = new Uint32Array(reveal_delta + flag_delta + 1)
 			for (var i = this.reveal_index; i < this.board.reveal_history.length; i++) {
-				message[i - this.reveal_index] = (this.board.reveal_history[i])
-				if (!this.board.tiles[this.board.reveal_history[i]].is_bomb) {
-					this.minimap.update_region(this.board.reveal_history[i])
+				var revealed_index = this.board.reveal_history[i]
+				var revealed_tile = this.board.tiles[revealed_index]
+				if (revealed_tile.is_covered) {
+					conn.close()
+					return
+				}
+				message[i - this.reveal_index] = (revealed_index)
+				if (!revealed_tile.is_bomb) {
+					this.minimap.update_region(revealed_index)
 				}
 			}
 			message[reveal_delta] = 1000000000
