@@ -374,6 +374,13 @@ class Minimap {
 		}
 	}
 
+	count_bombs(bombs) {
+		for (var index of bombs) {
+			var region_index = this.get_region_index(index)
+			this.region_counts[region_index] -= 1
+		}
+	}
+
 	get_region_index(tile_index) {
 		var x = Math.floor(tile_index % this.board.width)
 		var y = Math.floor(tile_index / this.board.height)
@@ -490,6 +497,7 @@ class Gui {
 		this.board = new Board(this.width, this.height, this.num_bombs)
 		this.board.assign_bombs_with_indices(board_data["Bombs"])
 		this.minimap = new Minimap(this)
+		this.minimap.count_bombs(board_data["Bombs"])
 	} 
 
 	load_image(image_path) {
@@ -714,7 +722,7 @@ class Gui {
 			message[reveal_delta] = 1000000000
 			for (var i = this.flag_index; i < this.board.flag_history.length; i++) {
 				message[i - this.flag_index + reveal_delta + 1] = (this.board.flag_history[i])
-				this.minimap.update_region(this.board.flag_history[i])
+				//this.minimap.update_region(this.board.flag_history[i])
 			}
 			conn.send(message)
 			this.reveal_index = this.board.reveal_history.length;
@@ -749,7 +757,7 @@ function start_listening() {
 				var tile = gui.board.tiles[index]
 				if (!tile.is_flagged) {
 					tile.is_flagged = true
-					gui.minimap.update_region(index)
+					//gui.minimap.update_region(index)
 				}
 			}
 			else {
