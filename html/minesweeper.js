@@ -645,13 +645,18 @@ class Gui {
 		window.requestAnimationFrame(() => this.render_region());
 	}
 
+	in_bounds(event) {
+		var rect = this.canvas.getBoundingClientRect();
+		return event.x >= rect.left && event.x <= rect.right && event.y >= rect.top && event.y <= rect.bottom
+	}
+
 	on_mouse_up(event) {
 		this.is_dragging = false;
 		this.minimap.dragging = false
 		var button = event.which
 		if (button == 1) {
 			this.left_mouse_down = false
-			if (event.shiftKey) {
+			if (event.shiftKey || !this.in_bounds(event)) {
 				window.requestAnimationFrame(() => this.render_region());
 				return
 			}
