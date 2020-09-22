@@ -651,6 +651,10 @@ class Gui {
 		var button = event.which
 		if (button == 1) {
 			this.left_mouse_down = false
+			if (event.shiftKey) {
+				window.requestAnimationFrame(() => this.render_region());
+				return
+			}
 			var clicked_tile = this.board.tiles[this.hovered_tile()]
 			if (clicked_tile.is_covered && !this.right_mouse_down) {
 				this.board.reveal(clicked_tile.index);
