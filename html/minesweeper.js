@@ -270,7 +270,8 @@ class Board {
 	//Row and Col are the starting row and col of the upper-left tile in the region.
 	//width and height are the number of cells to draw in the region
 	//x and y denote where to draw the upper left cell. Note that these usually will be negative (a bit cut off).
-	render_region(ctx, tile_size, colors, row, col, width, height, x, y) {
+	//hover warning tiles are the tiles that the user is about to click or chord. If click, its one thing, if chord a list
+	render_region(ctx, tile_size, colors, row, col, width, height, x, y, hover_warning_tiles) {
 		for (var r = 0; r <  height; r++) {
 			for (var c = 0; c < width; c++) {
 				var current_row = row + r;
@@ -279,8 +280,7 @@ class Board {
 				var tile = this.tiles[index];
 				var tile_x = tile_size * c + x;
 				var tile_y = tile_size * r + y;
-				this.draw_tile(tile, ctx, tile_size, tile_x, tile_y, colors);
-
+				this.draw_tile(tile, ctx, tile_size, tile_x, tile_y, colors, hover_warning_tiles);
 			}
 		}
 	}
@@ -289,7 +289,11 @@ class Board {
 		ctx.drawImage(colors[tile.number], x, y);
 	}
 
-	draw_tile(tile, ctx, tile_size, x, y, colors) {
+	draw_tile(tile, ctx, tile_size, x, y, colors, hover_warning_tiles) {
+		if (hover_warning_tiles.includes(tile) && !tile.is_flagged) {
+			ctx.drawImage(colors[0], x, y);
+			return
+		}
 		if (tile.is_covered) {
 			if (tile.is_flagged) {
 				ctx.drawImage(colors[11], x, y);
@@ -489,6 +493,8 @@ class Gui {
 		this.cursor_y = 0;
 		this.reveal_index = 0;
 		this.flag_index = 0;
+		this.left_mouse_down = false;
+		this.right_mouse_down = false;
 	}
 
 	async load_board() {
@@ -550,6 +556,34 @@ class Gui {
 		this.board.render(ctx, this.tile_size, this.colors);
 	}
 
+	//Tile that the mouse is hovering over
+	hovered_tile() {
+		var rect = this.canvas.getBoundingClientRect();
+    	var x = this.cursor_x - rect.left + this.current_x;
+    	var y = this.cursor_y - rect.top + this.current_y;
+		var row = Math.floor(y / this.tile_size);
+		var col = Math.floor(x / this.tile_size);
+		return row * this.board.width + col
+	}
+
+	//Tiles that need to be warned
+	hover_warning_tiles() {
+		if (!this.left_mouse_down) {
+			return []
+		}
+		var hovered_tile = this.hovered_tile()
+		if (this.right_mouse_down) {
+			return this.board.covered_radius(hovered_tile)
+		}
+		if (this.board.tiles[hovered_tile].is_covered) {
+			return [this.board.tiles[hovered_tile]]
+		}
+		return []
+		
+	}
+
+
+
 	render_region() {
 		//render_region(ctx, tile_size, colors, row, col, width, height, x, y) {
 		var ctx = this.canvas.getContext("2d", { alpha: false });
@@ -560,7 +594,7 @@ class Gui {
 		var width_to_draw = this.current_x >= this.tile_size * (this.board.width - this.window_width) ? this.window_width : this.window_width + 1;
 		var height_to_draw = this.current_y >= this.tile_size * (this.board.height - this.window_height) ? this.window_height : this.window_height + 1;
 
-		this.board.render_region(ctx, this.tile_size, this.colors, row, col, width_to_draw, height_to_draw, x, y)
+		this.board.render_region(ctx, this.tile_size, this.colors, row, col, width_to_draw, height_to_draw, x, y, this.hover_warning_tiles())
 		this.minimap.render()
 	}
 
@@ -580,6 +614,9 @@ class Gui {
 			var ctx = this.canvas.getContext("2d", { alpha: false });
 			var button = event.which
 			var index = row * this.board.width + col
+			if (button == 1) {
+				this.left_mouse_down = true
+			}
 			if (button == 1 || button == 2) {
 				var clicked_tile = this.board.tiles[index];
 				if (event.shiftKey || button == 2 || (!clicked_tile.is_covered && clicked_tile.number == 0)) {
@@ -591,17 +628,6 @@ class Gui {
 					console.log("Dragging...")
 					return;
 				}
-				if (this.first_click) {
-					///this.board.assign_bombs_with_zero(index);
-					this.start = new Date();
-					this.first_click = false;
-				}
-				if (clicked_tile.is_covered) {
-					this.board.reveal(index);
-				}
-				else {
-					this.board.chord(index);
-				}
 				if (this.board.tiles_left == 0) {
 					var now = new Date();
 					var time = (now - this.start) / 1000;
@@ -609,8 +635,11 @@ class Gui {
 				}
 			}
 			else if (button == 3) {
-				this.board.flag(index);
-				console.log(this.board.bombs_left);
+				this.right_mouse_down = true
+				if (!this.left_mouse_down) {
+					this.board.flag(index);
+					console.log(this.board.bombs_left);
+				}	
 			}
 		}
 		window.requestAnimationFrame(() => this.render_region());
@@ -619,6 +648,29 @@ class Gui {
 	on_mouse_up(event) {
 		this.is_dragging = false;
 		this.minimap.dragging = false
+		var button = event.which
+		if (button == 1) {
+			this.left_mouse_down = false
+			var clicked_tile = this.board.tiles[this.hovered_tile()]
+			if (clicked_tile.is_covered && !this.right_mouse_down) {
+				this.board.reveal(clicked_tile.index);
+			}
+			else if (this.right_mouse_down) {
+				this.board.chord(clicked_tile.index);
+			}
+			window.requestAnimationFrame(() => this.render_region());
+		}
+		if (button == 3) {
+			this.right_mouse_down = false
+			if (this.left_mouse_down) {
+				var clicked_tile = this.board.tiles[this.hovered_tile()]
+				if (!clicked_tile.is_covered) {
+					this.board.chord(clicked_tile.index);
+					window.requestAnimationFrame(() => this.render_region());
+				}
+			}
+		}
+		
 	}
 
 	on_mouse_move(event) {
@@ -626,6 +678,9 @@ class Gui {
 		this.cursor_y = event.y;
 		if (!this.is_dragging) {
 			this.minimap.on_mouse_move(event)
+			if (this.left_mouse_down) {
+				window.requestAnimationFrame(() => this.render_region());
+			}
 			return;
 		}
 		var dx =  this.anchor_x - event.x;
@@ -748,7 +803,7 @@ class Gui {
 var gui = new Gui();
 function start_listening() {
 	document.addEventListener("mousedown", (event) => gui.on_click(event));
-	document.addEventListener("keydown", (event) => gui.on_key(event));
+	//document.addEventListener("keydown", (event) => gui.on_key(event));
 	document.addEventListener("mouseup", (event) => gui.on_mouse_up(event))
 	document.addEventListener("mousemove", (event) => gui.on_mouse_move(event))
 	var conn = new WebSocket("ws://" + document.location.host + "/ws");
