@@ -136,7 +136,6 @@ class Board {
 			return;
 		}
 		revealed_tile.reveal();
-		this.reveal_history.push(index)
 		if (revealed_tile.is_bomb) {
 			this.status = "lose";
 			this.bombs_left -= 1;
@@ -145,6 +144,7 @@ class Board {
 		else {
 			this.tiles_left -= 1;
 		}
+		this.reveal_history.push(index)
 		if (revealed_tile.number == 0) {
 			var to_reveal = [revealed_tile]
 			while(to_reveal.length > 0) {
@@ -367,7 +367,6 @@ class Minimap {
 		this.init_counts()
 		this.init_background_minimap()
 		this.dragging = false
-		
 	}
 
 	init_counts() {
@@ -495,6 +494,7 @@ class Gui {
 		this.flag_index = 0;
 		this.left_mouse_down = false;
 		this.right_mouse_down = false;
+		this.render_callback = this.render_region.bind(this)
 	}
 
 	async load_board() {
@@ -642,7 +642,7 @@ class Gui {
 				}	
 			}
 		}
-		window.requestAnimationFrame(() => this.render_region());
+		window.requestAnimationFrame(this.render_callback);
 	}
 
 	in_bounds(event) {
@@ -657,7 +657,7 @@ class Gui {
 		if (button == 1) {
 			this.left_mouse_down = false
 			if (event.shiftKey || !this.in_bounds(event)) {
-				window.requestAnimationFrame(() => this.render_region());
+				window.requestAnimationFrame(this.render_callback);
 				return
 			}
 			var clicked_tile = this.board.tiles[this.hovered_tile()]
@@ -667,7 +667,7 @@ class Gui {
 			else if (this.right_mouse_down) {
 				this.board.chord(clicked_tile.index);
 			}
-			window.requestAnimationFrame(() => this.render_region());
+			window.requestAnimationFrame(this.render_callback);
 		}
 		if (button == 3) {
 			this.right_mouse_down = false
@@ -675,7 +675,7 @@ class Gui {
 				var clicked_tile = this.board.tiles[this.hovered_tile()]
 				if (!clicked_tile.is_covered) {
 					this.board.chord(clicked_tile.index);
-					window.requestAnimationFrame(() => this.render_region());
+					window.requestAnimationFrame(this.render_callback);
 				}
 			}
 		}
@@ -688,7 +688,7 @@ class Gui {
 		if (!this.is_dragging) {
 			this.minimap.on_mouse_move(event)
 			if (this.left_mouse_down) {
-				window.requestAnimationFrame(() => this.render_region());
+				window.requestAnimationFrame(this.render_callback);
 			}
 			return;
 		}
@@ -720,7 +720,7 @@ class Gui {
 		else {
 			this.current_y = new_y
 		}
-		window.requestAnimationFrame(() => this.render_region());
+		window.requestAnimationFrame(this.render_callback);
 	}
 
 	reset() {
@@ -750,7 +750,7 @@ class Gui {
 	apply() {
 		this.tile_size = parseInt(document.getElementById("tile_size").value, 10);
 		this.resize();
-		this.load_images().then(() => {window.requestAnimationFrame(() => this.render_region());})
+		this.load_images().then(() => {window.requestAnimationFrame(this.render_callback);})
 		
 	}
 
@@ -774,14 +774,14 @@ class Gui {
 			var new_y = this.current_y + 5 * this.tile_size;
 			this.update_position(this.current_x, new_y)
 		}
-		window.requestAnimationFrame(() => this.render_region());
+		window.requestAnimationFrame(this.render_callback);
 	}
 
 	send_data(conn) {
 		var reveal_delta = this.board.reveal_history.length - this.reveal_index
 		var flag_delta = this.board.flag_history.length - this.flag_index
 		if (reveal_delta + flag_delta > 0 && reveal_delta + flag_delta < 3000) {
-			var message = new Uint32Array(reveal_delta + flag_delta + 1)
+			var message = new Int32Array(reveal_delta + flag_delta + 1)
 			for (var i = this.reveal_index; i < this.board.reveal_history.length; i++) {
 				var revealed_index = this.board.reveal_history[i]
 				var revealed_tile = this.board.tiles[revealed_index]
@@ -819,7 +819,7 @@ function start_listening() {
 	conn.binaryType = "arraybuffer";
 	setInterval(() => { gui.send_data(conn) }, 100)
 	function recieve_data(event) {
-		var indices = new Uint32Array(event.data)
+		var indices = new Int32Array(event.data)
 		console.log(indices.length)
 		var flag = false
 		for (var i = 0; i < indices.length; i++) {
@@ -845,7 +845,7 @@ function start_listening() {
 				}
 			}
 		}
-		window.requestAnimationFrame(() => gui.render_region());
+		window.requestAnimationFrame(gui.render_callback);
 	}
 	conn.addEventListener('message', recieve_data);
 	gui.render_region()	
