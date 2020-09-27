@@ -139,6 +139,7 @@ class Board {
 		if (revealed_tile.is_bomb) {
 			this.status = "lose";
 			this.bombs_left -= 1;
+			this.flag_history.push(index)
 			return;
 		}
 		else {
