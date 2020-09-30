@@ -585,8 +585,8 @@ class Gui {
 	//Supplies tile-normalized x and y coordinates. ex. 3.2 tiles right, 9.5 tiles down
 	tile_normalized_coord() {
 		var rect = this.canvas.getBoundingClientRect();
-    	var x = this.cursor_x - rect.left + this.current_x;
-    	var y = this.cursor_y - rect.top + this.current_y;
+		var x = this.cursor_x - rect.left + this.current_x;
+		var y = this.cursor_y - rect.top + this.current_y;
 		var row = y / this.tile_size;
 		var col = x / this.tile_size;
 		return [col, row]
