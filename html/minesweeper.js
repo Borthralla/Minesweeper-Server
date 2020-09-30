@@ -608,9 +608,17 @@ class Gui {
 		
 	}
 
+	draw_triangle(x, y) {
+		this.ctx.beginPath()
+		this.ctx.moveTo(x, y)
+		this.ctx.lineTo(x, y + 15)
+		this.ctx.lineTo(x + 10, y + 10)
+		this.ctx.fill()
+	}
+
 	draw_player(x, y) {
 		this.ctx.fillStyle = "#663399"
-		this.ctx.fillRect(x,y,10,10)
+		this.draw_triangle(x,y)
 	}
 
 	player_in_bounds(x, y) {
