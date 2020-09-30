@@ -457,6 +457,18 @@ class Minimap {
 		this.background_minimap_ctx.fillRect(0,0,this.width,this.height)
 	}
 
+	draw_players() {
+		var ctx = this.canvas.getContext("2d");
+		ctx.fillStyle = "#ff1493"
+		for (var i = 0; i < this.gui.player_positions.length / 2; i++) {
+			var x = Math.floor(this.gui.player_positions[2 * i] / this.region_width)
+			var y = Math.floor(this.gui.player_positions[2 * i + 1] / this.region_height)
+			if (x >= 0) {
+				ctx.fillRect(x, y, 2, 2)
+			}
+		}
+	}
+
 	render() {
 		var ctx = this.canvas.getContext("2d");
 		ctx.drawImage(this.background_minimap, 0, 0)
@@ -466,12 +478,14 @@ class Minimap {
 		var mini_height_length = Math.floor(this.gui.window_height / this.region_height)
 		ctx.strokeStyle = "#ff0000"
 		ctx.strokeRect(mini_pos_x, mini_pos_y, mini_width_length, mini_height_length)
+		this.draw_players()
 	}
 }
 
 class Gui {
 	constructor() {
 		this.canvas = document.getElementById("myCanvas");
+		this.ctx = this.canvas.getContext("2d", { alpha: false });
 		var width = 0;
 		var height = 0;
 		var num_bombs = 0;
@@ -496,6 +510,7 @@ class Gui {
 		this.left_mouse_down = false;
 		this.right_mouse_down = false;
 		this.render_callback = this.render_region.bind(this)
+		this.player_positions = []
 	}
 
 	async load_board() {
@@ -567,6 +582,16 @@ class Gui {
 		return row * this.board.width + col
 	}
 
+	//Supplies tile-normalized x and y coordinates. ex. 3.2 tiles right, 9.5 tiles down
+	tile_normalized_coord() {
+		var rect = this.canvas.getBoundingClientRect();
+    	var x = this.cursor_x - rect.left + this.current_x;
+    	var y = this.cursor_y - rect.top + this.current_y;
+		var row = y / this.tile_size;
+		var col = x / this.tile_size;
+		return [col, row]
+	}
+
 	//Tiles that need to be warned
 	hover_warning_tiles() {
 		if (!this.left_mouse_down) {
@@ -583,11 +608,30 @@ class Gui {
 		
 	}
 
+	draw_player(x, y) {
+		this.ctx.fillStyle = "#663399"
+		this.ctx.fillRect(x,y,10,10)
+	}
+
+	player_in_bounds(x, y) {
+		var right_bound = this.current_x + (this.window_width + 1) * this.tile_size
+		var bottom_bound = this.current_y + (this.window_height + 1) * this.tile_size
+		return x >= this.current_x && x <= right_bound && y >= this.current_y && y <= bottom_bound
+	}
+
+	render_players() {
+		for (var i = 0; i < this.player_positions.length / 2; i++) {
+			var x = Math.floor(this.player_positions[2 * i] * this.tile_size)
+			var y = Math.floor(this.player_positions[2 * i + 1] * this.tile_size)
+			if (this.player_in_bounds(x, y)) {
+				this.draw_player(x - this.current_x, y - this.current_y)
+			}
+		}
+	}
 
 
 	render_region() {
 		//render_region(ctx, tile_size, colors, row, col, width, height, x, y) {
-		var ctx = this.canvas.getContext("2d", { alpha: false });
 		var row = Math.floor(this.current_y / this.tile_size);
 		var col = Math.floor(this.current_x / this.tile_size);
 		var x = this.tile_size * col - this.current_x;
@@ -595,8 +639,9 @@ class Gui {
 		var width_to_draw = this.current_x >= this.tile_size * (this.board.width - this.window_width) ? this.window_width : this.window_width + 1;
 		var height_to_draw = this.current_y >= this.tile_size * (this.board.height - this.window_height) ? this.window_height : this.window_height + 1;
 
-		this.board.render_region(ctx, this.tile_size, this.colors, row, col, width_to_draw, height_to_draw, x, y, this.hover_warning_tiles())
+		this.board.render_region(this.ctx, this.tile_size, this.colors, row, col, width_to_draw, height_to_draw, x, y, this.hover_warning_tiles())
 		this.minimap.render()
+		this.render_players(x, y)
 	}
 
 	on_click(event) {
@@ -612,7 +657,6 @@ class Gui {
 			return;
 		}
 		else {
-			var ctx = this.canvas.getContext("2d", { alpha: false });
 			var button = event.which
 			var index = row * this.board.width + col
 			if (button == 1) {
@@ -646,9 +690,9 @@ class Gui {
 		window.requestAnimationFrame(this.render_callback);
 	}
 
-	in_bounds(event) {
+	in_bounds(x, y) {
 		var rect = this.canvas.getBoundingClientRect();
-		return event.x >= rect.left && event.x <= rect.right && event.y >= rect.top && event.y <= rect.bottom
+		return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
 	}
 
 	on_mouse_up(event) {
@@ -657,7 +701,7 @@ class Gui {
 		var button = event.which
 		if (button == 1) {
 			this.left_mouse_down = false
-			if (event.shiftKey || !this.in_bounds(event)) {
+			if (event.shiftKey || !this.in_bounds(event.x, event.y)) {
 				window.requestAnimationFrame(this.render_callback);
 				return
 			}
@@ -781,33 +825,34 @@ class Gui {
 	send_data(conn) {
 		var reveal_delta = this.board.reveal_history.length - this.reveal_index
 		var flag_delta = this.board.flag_history.length - this.flag_index
-		if (reveal_delta + flag_delta > 0 && reveal_delta + flag_delta < 3000) {
-			var message = new Int32Array(reveal_delta + flag_delta + 1)
-			for (var i = this.reveal_index; i < this.board.reveal_history.length; i++) {
-				var revealed_index = this.board.reveal_history[i]
-				var revealed_tile = this.board.tiles[revealed_index]
-				if (revealed_tile.is_covered) {
-					conn.close()
-					return
-				}
-				message[i - this.reveal_index] = (revealed_index)
-				if (!revealed_tile.is_bomb) {
-					this.minimap.update_region(revealed_index)
-				}
-			}
-			message[reveal_delta] = 1000000000
-			for (var i = this.flag_index; i < this.board.flag_history.length; i++) {
-				message[i - this.flag_index + reveal_delta + 1] = (this.board.flag_history[i])
-				//this.minimap.update_region(this.board.flag_history[i])
-			}
-			conn.send(message)
-			this.reveal_index = this.board.reveal_history.length;
-			this.flag_index = this.board.flag_history.length;
+		var [x, y] = gui.tile_normalized_coord()
+		if (!gui.in_bounds(gui.cursor_x, gui.cursor_y)) {
+			return
 		}
+		var message_data = new ArrayBuffer((4 + reveal_delta + flag_delta) * 4)
+		var message = new DataView(message_data)
+		console.log("positions: ", x, y)
+		message.setFloat32(0, x)
+		message.setFloat32(4, y)
+		message.setInt32(8, reveal_delta)
+		message.setInt32(12, flag_delta)
+		var section_start = 4
+		for (var i = 0; i < reveal_delta; i++) {
+			var revealed_index = this.board.reveal_history[this.reveal_index + i]
+			message.setInt32((section_start + i) * 4, revealed_index)
+			this.minimap.update_region(revealed_index)
+		}
+		section_start += reveal_delta
+		for (var i = 0; i < flag_delta; i++) {
+			message.setInt32((section_start + i) * 4, this.board.flag_history[this.flag_index + i])
+		}
+		conn.send(message)
+		this.reveal_index = this.board.reveal_history.length;
+		this.flag_index = this.board.flag_history.length;
+		console.log("sending message:", message)
 	}
 
 }
-
 
 
 var gui = new Gui();
@@ -818,37 +863,51 @@ function start_listening() {
 	document.addEventListener("mousemove", (event) => gui.on_mouse_move(event))
 	var conn = new WebSocket("ws://" + document.location.host + "/ws");
 	conn.binaryType = "arraybuffer";
-	setInterval(() => { gui.send_data(conn) }, 100)
+	setInterval(() => { gui.send_data(conn) }, 33)
+
+	function on_visibility_change() {
+		console.log("visibility has changed")
+		if (document.hidden) {
+			var buffer = new ArrayBuffer(4)
+			var message = new DataView(buffer)
+			message.setFloat32(0, -1)
+			console.log("tab is hidden, sending AFK message")
+			conn.send(message)
+		}
+	}
+
 	function recieve_data(event) {
-		var indices = new Int32Array(event.data)
-		console.log(indices.length)
-		var flag = false
-		for (var i = 0; i < indices.length; i++) {
-			var index = indices[i]
-			if (index == 1000000000) {
-				flag = true
-				continue
+		var message = new DataView(event.data)
+		num_players = message.getInt32(0)
+		num_reveals = message.getInt32(4)
+		num_flags = message.getInt32(8)
+		gui.player_positions.length = num_players * 2
+		var section_start = 3
+		for (var i = 0; i < num_players; i++) {
+			gui.player_positions[2 * i] = message.getFloat32(4 * (section_start + (2 * i)))
+			gui.player_positions[2 * i + 1] = message.getFloat32(4 * (section_start + (2 * i + 1)))
+		}
+		section_start += num_players * 2
+		for (var i = section_start; i < num_reveals + section_start; i++) {
+			var index = message.getInt32(i * 4)
+			var tile = gui.board.tiles[index]
+			if (tile.is_covered) {
+				tile.reveal()
+				gui.minimap.update_region(index)
 			}
-			if (flag) {
-				var tile = gui.board.tiles[index]
-				if (!tile.is_flagged) {
-					tile.is_flagged = true
-					//gui.minimap.update_region(index)
-				}
-			}
-			else {
-				var tile = gui.board.tiles[index]
-				if (tile.is_covered) {
-					tile.reveal()
-					if (!tile.is_bomb) {
-						gui.minimap.update_region(index)
-					}
-				}
+		}
+		section_start += num_reveals
+		for (var i = section_start; i < num_flags + section_start; i++) {
+			var index = message.getInt32(i * 4)
+			var tile = gui.board.tiles[index]
+			if (!tile.is_flagged) {
+				tile.is_flagged = true
 			}
 		}
 		window.requestAnimationFrame(gui.render_callback);
 	}
 	conn.addEventListener('message', recieve_data);
+	document.addEventListener("visibilitychange", on_visibility_change)
 	gui.render_region()	
 }
 gui.load_board_and_images().then(() => { start_listening() })
