@@ -100,7 +100,7 @@ func read_reveals(conn *websocket.Conn, player_index int16, player_pos_index *in
 			return
 		}
 		buffer := bytes.NewReader(message);
-		fmt.Printf("Positions: %v\n", player_positions[0:num_players * 2])
+		//fmt.Printf("Positions: %v\n", player_positions[0:num_players * 2])
 		if (*player_pos_index >= num_players) {
 			fmt.Printf("Switching index from %v\n", *player_pos_index)
 			change_player_location(player_pos_index)
@@ -112,43 +112,43 @@ func read_reveals(conn *websocket.Conn, player_index int16, player_pos_index *in
 		// Since GoLang is kinda trash I'm going to copy paste this to read an integer >:(
 		err = binary.Read(buffer, binary.BigEndian, &float_data)
 		if err != nil {
-			continue
+			return
 		}
 
 		if (float_data < float32(0)) {
 			*afk = true
 			fmt.Printf("Player %v is afk\n", player_index)
-			player_positions[2 * (*player_pos_index)] = float32(-1)
-			player_positions[2 * (*player_pos_index) + 1] = float32(-1)
+			remove_player(player_pos_index)
 			continue
 		}
 		if (*afk) {
 			*afk = false
 			fmt.Printf("Player %v is No Longer afk\n", player_index)
+			*player_pos_index = add_player()
 		}
 
 		player_positions[2 * (*player_pos_index)] = float_data
-		fmt.Printf("Recieved coord: %v\n", float_data)
+		//fmt.Printf("Recieved coord: %v\n", float_data)
 
 		err = binary.Read(buffer, binary.BigEndian, &float_data)
 		if err != nil {
-			continue
+			return
 		}
 
 		player_positions[2 * (*player_pos_index) + 1] = float_data
-		fmt.Printf("Recieved coord: %v\n", float_data)
+		//fmt.Printf("Recieved coord: %v\n", float_data)
 
 		var num_reveals int32
 		var num_flags int32
 
 		err = binary.Read(buffer, binary.BigEndian, &num_reveals)
 		if err != nil {
-			continue
+			return
 		}
 
 		err = binary.Read(buffer, binary.BigEndian, &num_flags)
 		if err != nil {
-			continue
+			return
 		}
 
 		if (num_reveals + num_flags > 0) {
@@ -156,7 +156,7 @@ func read_reveals(conn *websocket.Conn, player_index int16, player_pos_index *in
 			for i := int32(0); i < num_reveals; i++ {
 				err = binary.Read(buffer, binary.BigEndian, &data)
 				if err != nil {
-					break
+					return
 				}
 				board.revealed_history = append(board.revealed_history, Board_Event{data, player_index})
 			}
@@ -164,7 +164,7 @@ func read_reveals(conn *websocket.Conn, player_index int16, player_pos_index *in
 			for i := int32(0); i< num_flags; i++ {
 				err = binary.Read(buffer, binary.BigEndian, &data)
 				if err != nil {
-					break
+					return
 				}
 				board.flag_history = append(board.flag_history, Board_Event{data, player_index})
 			}
@@ -231,6 +231,9 @@ func add_player() int32 {
 }
 
 func remove_player(player_pos_index *int32) {
+	if (*player_pos_index == int32(-1)) {
+		return
+	}
 	player_state_mutex.Lock()
 	player_positions[2 * (*player_pos_index)] = float32(-1)
 	player_positions[2 * (*player_pos_index) + 1] = float32(-1)
@@ -238,6 +241,7 @@ func remove_player(player_pos_index *int32) {
 	fmt.Printf("Changing number of players. Current value: %v\n", num_players)
 	num_players = num_players - int32(1)
 	fmt.Printf("New number of players: %v\n", num_players)
+	*player_pos_index = int32(-1)
 	player_state_mutex.Unlock()
 }
 
