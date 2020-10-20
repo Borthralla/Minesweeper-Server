@@ -899,7 +899,7 @@ function start_listening() {
 		for (var i = section_start; i < num_reveals + section_start; i++) {
 			var index = message.getInt32(i * 4)
 			var tile = gui.board.tiles[index]
-			if (tile.is_covered) {
+			if (tile && tile.is_covered) {
 				tile.reveal()
 				gui.minimap.update_region(index)
 			}
@@ -908,7 +908,7 @@ function start_listening() {
 		for (var i = section_start; i < num_flags + section_start; i++) {
 			var index = message.getInt32(i * 4)
 			var tile = gui.board.tiles[index]
-			if (!tile.is_flagged) {
+			if (tile && !tile.is_flagged) {
 				tile.is_flagged = true
 			}
 		}
