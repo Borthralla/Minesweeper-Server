@@ -218,12 +218,13 @@ func send_reveals(conn *websocket.Conn, player_index int16, player_pos_index *in
 
 func add_player() int32 {
 	player_state_mutex.Lock()
-	var player_pos_index = int32(0)
+	var player_pos_index = num_players
 	if (open_player_indices.Length > 0 ) {
-		player_pos_index = open_player_indices.Pop()
-	} else {
-		player_pos_index = num_players
-	}
+		var new_index = open_player_indices.Pop()
+		if (new_index < num_players) {
+			player_pos_index = new_index
+		}
+	} 
 	num_players += 1
 	player_state_mutex.Unlock()
 	fmt.Printf("New player added at pos %v, total players is %v\n", player_pos_index, num_players)
@@ -237,10 +238,12 @@ func remove_player(player_pos_index *int32) {
 	player_state_mutex.Lock()
 	player_positions[2 * (*player_pos_index)] = float32(-1)
 	player_positions[2 * (*player_pos_index) + 1] = float32(-1)
-	open_player_indices.Push(*player_pos_index)
 	fmt.Printf("Changing number of players. Current value: %v\n", num_players)
 	num_players = num_players - int32(1)
 	fmt.Printf("New number of players: %v\n", num_players)
+	if (*player_pos_index != num_players) {
+		open_player_indices.Push(*player_pos_index)
+	}
 	*player_pos_index = int32(-1)
 	player_state_mutex.Unlock()
 }
@@ -248,7 +251,10 @@ func remove_player(player_pos_index *int32) {
 func change_player_location(player_pos_index *int32) {
 	player_state_mutex.Lock()
 	if (open_player_indices.Length > 0 ) {
-		*player_pos_index = open_player_indices.Pop()
+		var new_index = open_player_indices.Pop()
+		if (new_index < num_players) {
+			*player_pos_index = new_index
+		}
 	}
 	player_state_mutex.Unlock()
 }
