@@ -312,8 +312,6 @@ class Board {
 		}
 	}
 
-
-
 }
 
 class Tile {
@@ -594,7 +592,7 @@ class Gui {
 
 	//Tiles that need to be warned
 	hover_warning_tiles() {
-		if (!this.left_mouse_down) {
+		if (!this.left_mouse_down || this.is_dragging) {
 			return []
 		}
 		var hovered_tile = this.hovered_tile()
@@ -672,7 +670,7 @@ class Gui {
 			}
 			if (button == 1 || button == 2) {
 				var clicked_tile = this.board.tiles[index];
-				if (event.shiftKey || button == 2 || (!clicked_tile.is_covered && clicked_tile.number == 0)) {
+				if (event.shiftKey || button == 2) {
 					this.is_dragging = true;
 					this.anchor_x = event.x;
 					this.anchor_y = event.y;
@@ -704,12 +702,13 @@ class Gui {
 	}
 
 	on_mouse_up(event) {
+		var was_dragging = this.is_dragging
 		this.is_dragging = false;
 		this.minimap.dragging = false
 		var button = event.which
 		if (button == 1) {
 			this.left_mouse_down = false
-			if (event.shiftKey || !this.in_bounds(event.x, event.y)) {
+			if (event.shiftKey || was_dragging || !this.in_bounds(event.x, event.y)) {
 				window.requestAnimationFrame(this.render_callback);
 				return
 			}
