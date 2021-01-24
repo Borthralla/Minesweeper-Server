@@ -136,6 +136,7 @@ class Board {
 			return;
 		}
 		revealed_tile.reveal();
+		this.draw_tile_in_bounds(revealed_tile)
 		if (revealed_tile.is_bomb) {
 			this.status = "lose";
 			this.bombs_left -= 1;
@@ -167,6 +168,7 @@ class Board {
 								to_reveal.push(tile);
 							}
 							tile.reveal();
+							this.draw_tile_in_bounds(tile)
 							this.reveal_history.push(tile.index)
 							this.tiles_left -= 1;
 						}
@@ -234,6 +236,7 @@ class Board {
 			}
 			this.bombs_left -= 1;
 		}
+		this.draw_tile_in_bounds(tile)
 	}
 
 	
@@ -286,6 +289,21 @@ class Board {
 		}
 	}
 
+	fast_render_region(ctx, tile_size, colors, row, col, x, y, hover_warning_tiles, prev_hover_warning_tiles) {
+		for (var prev_hover_tile of prev_hover_warning_tiles) {
+			if (!hover_warning_tiles.includes(prev_hover_tile)) {
+				var tile_x = ((prev_hover_tile.index % this.width) - col) * tile_size + x
+				var tile_y = (Math.floor((prev_hover_tile.index / this.width)) - row) * tile_size + y
+				this.draw_tile(prev_hover_tile, ctx, tile_size, tile_x, tile_y, colors, hover_warning_tiles);
+			}
+		}
+		for (var hover_tile of hover_warning_tiles) {
+			var tile_x = ((hover_tile.index % this.width) - col) * tile_size + x
+			var tile_y = (Math.floor((hover_tile.index / this.width)) - row) * tile_size + y
+			this.draw_tile(hover_tile, ctx, tile_size, tile_x, tile_y, colors, hover_warning_tiles);
+		}
+	}
+
 	draw_number(tile, ctx, tile_size, x, y, colors) {
 		ctx.drawImage(colors[tile.number], x, y);
 	}
@@ -311,6 +329,27 @@ class Board {
 			this.draw_number(tile, ctx, tile_size, x, y, colors);
 		}
 	}
+
+	draw_tile_in_bounds(tile) {
+		var tile_size = this.gui.tile_size
+		var row = Math.floor(this.gui.current_y / tile_size);
+		var col = Math.floor(this.gui.current_x / tile_size);
+		var x = tile_size * col - this.gui.current_x;
+		var y = tile_size * row - this.gui.current_y;
+		var tile_col = tile.index % this.width
+		if (tile_col < col || tile_col > (col + this.gui.window_width + 1)) {
+			return
+		}
+		var tile_row = Math.floor(tile.index / this.width)
+		if (tile_row < row || tile.row > (row + this.gui.window_height + 1)) {
+			return
+		}
+		var tile_x = (tile_col - col) * tile_size + x
+		var tile_y = (tile_row - row) * tile_size + y
+		this.draw_tile(tile, this.gui.ctx, tile_size, tile_x, tile_y, this.gui.colors, []);
+	}
+
+
 
 }
 
@@ -507,8 +546,8 @@ class Gui {
 		this.flag_index = 0;
 		this.left_mouse_down = false;
 		this.right_mouse_down = false;
-		this.render_callback = this.render_region.bind(this)
 		this.player_positions = []
+		this.prev_hover_warning_tiles = []
 	}
 
 	async load_board() {
@@ -518,6 +557,7 @@ class Gui {
 		this.height = board_data["Height"]
 		this.num_bombs = board_data["Bombs"].length
 		this.board = new Board(this.width, this.height, this.num_bombs)
+		this.board.gui = this
 		this.board.assign_bombs_with_indices(board_data["Bombs"])
 		this.minimap = new Minimap(this)
 		this.minimap.count_bombs(board_data["Bombs"])
@@ -625,12 +665,32 @@ class Gui {
 		return x >= this.current_x && x <= right_bound && y >= this.current_y && y <= bottom_bound
 	}
 
+	push_if_absent(array, element) {
+		if (!array.includes(element)) {
+			array.push(element)
+		}
+	}
+
 	render_players() {
 		for (var i = 0; i < this.player_positions.length / 2; i++) {
 			var x = Math.floor(this.player_positions[2 * i] * this.tile_size)
 			var y = Math.floor(this.player_positions[2 * i + 1] * this.tile_size)
 			if (this.player_in_bounds(x, y)) {
 				this.draw_player(x - this.current_x, y - this.current_y)
+				// Add to the tiles to be re-rendered during fast mode so player gets cleared
+				var col = Math.floor(this.player_positions[2 * i])
+				var row = Math.floor(this.player_positions[2 * i + 1])
+				var index = col + this.board.width * row
+				this.push_if_absent(this.prev_hover_warning_tiles, this.board.tiles[index])
+				if (col != this.board.width - 1) {
+					this.push_if_absent(this.prev_hover_warning_tiles, this.board.tiles[index + 1])
+					if (row != this.board.height - 1) {
+						this.push_if_absent(this.prev_hover_warning_tiles, this.board.tiles[index +this.board.width + 1])
+					}
+				}
+				if (row != this.board.height - 1) {
+					this.push_if_absent(this.prev_hover_warning_tiles, this.board.tiles[index +this.board.width])
+				}
 			}
 		}
 	}
@@ -646,6 +706,20 @@ class Gui {
 		var height_to_draw = this.current_y >= this.tile_size * (this.board.height - this.window_height) ? this.window_height : this.window_height + 1;
 
 		this.board.render_region(this.ctx, this.tile_size, this.colors, row, col, width_to_draw, height_to_draw, x, y, this.hover_warning_tiles())
+		this.minimap.render()
+		this.render_players(x, y)
+	}
+
+	render_static_region() {
+		var row = Math.floor(this.current_y / this.tile_size);
+		var col = Math.floor(this.current_x / this.tile_size);
+		var x = this.tile_size * col - this.current_x;
+		var y = this.tile_size * row - this.current_y;
+		var width_to_draw = this.current_x >= this.tile_size * (this.board.width - this.window_width) ? this.window_width : this.window_width + 1;
+		var height_to_draw = this.current_y >= this.tile_size * (this.board.height - this.window_height) ? this.window_height : this.window_height + 1;
+		var hover_warning_tiles = this.hover_warning_tiles()
+		this.board.fast_render_region(this.ctx, this.tile_size, this.colors, row, col, x, y, hover_warning_tiles, this.prev_hover_warning_tiles)
+		this.prev_hover_warning_tiles = hover_warning_tiles
 		this.minimap.render()
 		this.render_players(x, y)
 	}
@@ -671,6 +745,7 @@ class Gui {
 			if (button == 1 || button == 2) {
 				var clicked_tile = this.board.tiles[index];
 				if (event.shiftKey || button == 2) {
+					event.preventDefault()
 					this.is_dragging = true;
 					this.anchor_x = event.x;
 					this.anchor_y = event.y;
@@ -689,11 +764,10 @@ class Gui {
 				this.right_mouse_down = true
 				if (!this.left_mouse_down) {
 					this.board.flag(index);
-					console.log(this.board.bombs_left);
 				}	
 			}
 		}
-		window.requestAnimationFrame(this.render_callback);
+		this.render_static_region()
 	}
 
 	in_bounds(x, y) {
@@ -709,7 +783,7 @@ class Gui {
 		if (button == 1) {
 			this.left_mouse_down = false
 			if (event.shiftKey || was_dragging || !this.in_bounds(event.x, event.y)) {
-				window.requestAnimationFrame(this.render_callback);
+				this.render_region();
 				return
 			}
 			var clicked_tile = this.board.tiles[this.hovered_tile()]
@@ -719,7 +793,7 @@ class Gui {
 			else if (this.right_mouse_down) {
 				this.board.chord(clicked_tile.index);
 			}
-			window.requestAnimationFrame(this.render_callback);
+			this.render_static_region()
 		}
 		if (button == 3) {
 			this.right_mouse_down = false
@@ -727,7 +801,7 @@ class Gui {
 				var clicked_tile = this.board.tiles[this.hovered_tile()]
 				if (!clicked_tile.is_covered) {
 					this.board.chord(clicked_tile.index);
-					window.requestAnimationFrame(this.render_callback);
+					this.render_static_region()
 				}
 			}
 		}
@@ -740,7 +814,7 @@ class Gui {
 		if (!this.is_dragging) {
 			this.minimap.on_mouse_move(event)
 			if (this.left_mouse_down) {
-				window.requestAnimationFrame(this.render_callback);
+				this.render_static_region();
 			}
 			return;
 		}
@@ -772,7 +846,7 @@ class Gui {
 		else {
 			this.current_y = new_y
 		}
-		window.requestAnimationFrame(this.render_callback);
+		this.render_region();
 	}
 
 	reset() {
@@ -802,7 +876,7 @@ class Gui {
 	apply() {
 		this.tile_size = parseInt(document.getElementById("tile_size").value, 10);
 		this.resize();
-		this.load_images().then(() => {window.requestAnimationFrame(this.render_callback);})
+		this.load_images().then(() => {this.render_region();})
 		
 	}
 
@@ -826,7 +900,7 @@ class Gui {
 			var new_y = this.current_y + 5 * this.tile_size;
 			this.update_position(this.current_x, new_y)
 		}
-		window.requestAnimationFrame(this.render_callback);
+		this.render_region();
 	}
 
 	send_data(conn) {
@@ -900,6 +974,7 @@ function start_listening() {
 			var tile = gui.board.tiles[index]
 			if (tile && tile.is_covered) {
 				tile.reveal()
+				gui.board.draw_tile_in_bounds(tile)
 				gui.minimap.update_region(index)
 			}
 		}
@@ -909,9 +984,10 @@ function start_listening() {
 			var tile = gui.board.tiles[index]
 			if (tile && !tile.is_flagged) {
 				tile.is_flagged = true
+				gui.board.draw_tile_in_bounds(tile)
 			}
 		}
-		window.requestAnimationFrame(gui.render_callback);
+		gui.render_static_region()
 	}
 	conn.addEventListener('message', recieve_data);
 	document.addEventListener("visibilitychange", on_visibility_change)
