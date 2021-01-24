@@ -1005,3 +1005,14 @@ function reset() {
 function apply() {
 	gui.apply()
 }
+
+var help_text = `Shift click or middle click and drag to move around
+Click the minimap to move long distances
+Left click to reveal
+Right click to flag
+Left + Right click to chord`
+
+function help() {
+
+	alert(help_text)
+}
