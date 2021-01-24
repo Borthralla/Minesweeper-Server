@@ -275,9 +275,21 @@ class Board {
 	//width and height are the number of cells to draw in the region
 	//x and y denote where to draw the upper left cell. Note that these usually will be negative (a bit cut off).
 	//hover warning tiles are the tiles that the user is about to click or chord. If click, its one thing, if chord a list
-	render_region(ctx, tile_size, colors, row, col, width, height, x, y, hover_warning_tiles) {
-		for (var r = 0; r <  height; r++) {
-			for (var c = 0; c < width; c++) {
+	render_region(ctx, tile_size, colors, row, col, start_row, end_row, start_col, end_col, x, y, hover_warning_tiles) {
+		if (start_row > 0) {
+			ctx.fillRect(0, 0,this.gui.window_width * tile_size, start_row * tile_size)
+		}
+		if (end_row <= this.gui.window_height) {
+			ctx.fillRect(0, tile_size * end_row + y, this.gui.window_width * tile_size, tile_size * (this.gui.window_height - end_row) - y)
+		}
+		if (start_col > 0) {
+			ctx.fillRect(0, 0, tile_size * start_col, this.gui.window_height * tile_size)
+		}
+		if (end_col <= this.gui.window_width) {
+			ctx.fillRect(tile_size * end_col + x, 0, tile_size * (this.gui.window_width - end_col) - x, tile_size * this.gui.window_height)
+		}
+		for (var r = start_row; r <  end_row; r++) {
+			for (var c = start_col; c < end_col; c++) {
 				var current_row = row + r;
 				var current_col = col + c;
 				var index = this.width * current_row + current_col;
@@ -470,19 +482,21 @@ class Minimap {
 
 	change_position(event) {
 		var rect = this.canvas.getBoundingClientRect();
-    	var x = event.clientX - rect.left - Math.floor(this.gui.window_width / (2 * this.region_width))
-    	var y = event.clientY - rect.top - Math.floor(this.gui.window_height / (2 * this.region_height))
+    	var x = event.clientX - rect.left// - Math.floor(this.gui.window_width / (2 * this.region_width))
+    	var y = event.clientY - rect.top// - Math.floor(this.gui.window_height / (2 * this.region_height))
     	if (x < -1 || x >= this.width || y < -1 || y >= this.height) {
     		return false
     	}
-    	this.gui.update_position(this.gui.tile_size * this.region_width * x, this.gui.tile_size * this.region_height * y)
+
+    	this.gui.update_position(this.gui.tile_size * ( this.region_width * x - Math.floor(this.gui.window_width / 2)), 
+    		this.gui.tile_size * ( this.region_height * y - Math.ceil(this.gui.window_height / 2)))
     	return true
 	}
 
 	in_bounds(event) {
 		var rect = this.canvas.getBoundingClientRect();
-    	var x = event.clientX - rect.left - Math.floor(this.gui.window_width / (2 * this.region_width))
-    	var y = event.clientY - rect.top - Math.floor(this.gui.window_height / (2 * this.region_height))
+    	var x = event.clientX - rect.left// - Math.floor(this.gui.window_width / (2 * this.region_width))
+    	var y = event.clientY - rect.top// - Math.floor(this.gui.window_height / (2 * this.region_height))
     	if (x < -1 || x >= this.width || y < -1 || y >= this.height) {
     		return false
     	}
@@ -673,6 +687,9 @@ class Gui {
 	player_in_bounds(x, y) {
 		var right_bound = this.current_x + (this.window_width + 1) * this.tile_size
 		var bottom_bound = this.current_y + (this.window_height + 1) * this.tile_size
+		if (x < 0 || y < 0 || x > this.board.width * this.tile_size || y > this.board.height * this.tile_size) {
+			return false
+		}
 		return x >= this.current_x && x <= right_bound && y >= this.current_y && y <= bottom_bound
 	}
 
@@ -713,10 +730,13 @@ class Gui {
 		var col = Math.floor(this.current_x / this.tile_size);
 		var x = this.tile_size * col - this.current_x;
 		var y = this.tile_size * row - this.current_y;
-		var width_to_draw = this.current_x >= this.tile_size * (this.board.width - this.window_width) ? this.window_width : this.window_width + 1;
-		var height_to_draw = this.current_y >= this.tile_size * (this.board.height - this.window_height) ? this.window_height : this.window_height + 1;
+		var start_row = row >= 0 ? 0 : row * -1
+		var end_row = row < this.board.height - this.window_height ? this.window_height + 1 : this.board.height - row
+		var start_col = col >= 0 ? 0 : col * -1
+		var end_col = col < this.board.width - this.window_width ? this.window_width + 1 : this.board.width - col
 
-		this.board.render_region(this.ctx, this.tile_size, this.colors, row, col, width_to_draw, height_to_draw, x, y, this.hover_warning_tiles())
+		this.ctx.fillStyle = "#000000"
+		this.board.render_region(this.ctx, this.tile_size, this.colors, row, col, start_row, end_row, start_col, end_col, x, y, this.hover_warning_tiles())
 		this.minimap.render()
 		this.render_players(x, y)
 	}
@@ -726,8 +746,6 @@ class Gui {
 		var col = Math.floor(this.current_x / this.tile_size);
 		var x = this.tile_size * col - this.current_x;
 		var y = this.tile_size * row - this.current_y;
-		var width_to_draw = this.current_x >= this.tile_size * (this.board.width - this.window_width) ? this.window_width : this.window_width + 1;
-		var height_to_draw = this.current_y >= this.tile_size * (this.board.height - this.window_height) ? this.window_height : this.window_height + 1;
 		var hover_warning_tiles = this.hover_warning_tiles()
 		this.board.fast_render_region(this.ctx, this.tile_size, this.colors, row, col, x, y, hover_warning_tiles, this.prev_hover_warning_tiles)
 		this.prev_hover_warning_tiles = hover_warning_tiles
@@ -787,7 +805,7 @@ class Gui {
 	}
 
 	on_mouse_up(event) {
-		var was_dragging = this.is_dragging
+		var was_dragging = this.is_dragging || this.minimap.dragging
 		this.is_dragging = false;
 		this.minimap.dragging = false
 		var button = event.which
@@ -840,6 +858,9 @@ class Gui {
 	}
 
 	update_position(new_x, new_y) {
+		this.current_x = new_x
+		this.current_y = new_y
+		/*
 		var x_max = this.tile_size * (this.board.width - this.window_width)
 		var y_max = this.tile_size * (this.board.height - this.window_height)
 		if (new_x <= 0) {
@@ -860,6 +881,7 @@ class Gui {
 		else {
 			this.current_y = new_y
 		}
+		*/
 		this.render_region();
 	}
 
