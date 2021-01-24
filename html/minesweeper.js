@@ -475,8 +475,17 @@ class Minimap {
     	if (x < -1 || x >= this.width || y < -1 || y >= this.height) {
     		return false
     	}
-
     	this.gui.update_position(this.gui.tile_size * this.region_width * x, this.gui.tile_size * this.region_height * y)
+    	return true
+	}
+
+	in_bounds(event) {
+		var rect = this.canvas.getBoundingClientRect();
+    	var x = event.clientX - rect.left - Math.floor(this.gui.window_width / (2 * this.region_width))
+    	var y = event.clientY - rect.top - Math.floor(this.gui.window_height / (2 * this.region_height))
+    	if (x < -1 || x >= this.width || y < -1 || y >= this.height) {
+    		return false
+    	}
     	return true
 	}
 
@@ -521,7 +530,7 @@ class Minimap {
 
 class Gui {
 	constructor() {
-		this.canvas = document.getElementById("myCanvas");
+		this.canvas = document.getElementById("game");
 		this.ctx = this.canvas.getContext("2d", { alpha: false });
 		var width = 0;
 		var height = 0;
@@ -601,6 +610,8 @@ class Gui {
 	}
 
 	resize() {
+		this.window_width = Math.ceil(window.innerWidth / this.tile_size)
+		this.window_height = Math.ceil((window.innerHeight - 30) / this.tile_size)
 		this.canvas.width = this.window_width * this.tile_size;
 		this.canvas.height = this.window_height * this.tile_size;
 	}
@@ -780,6 +791,9 @@ class Gui {
 		this.is_dragging = false;
 		this.minimap.dragging = false
 		var button = event.which
+		if (this.minimap.in_bounds(event)) {
+			return
+		}
 		if (button == 1) {
 			this.left_mouse_down = false
 			if (event.shiftKey || was_dragging || !this.in_bounds(event.x, event.y)) {
@@ -850,7 +864,7 @@ class Gui {
 	}
 
 	reset() {
-		this.canvas = document.getElementById("myCanvas");
+		this.canvas = document.getElementById("game");
 		var width = parseInt(document.getElementById("width").value, 10);
 		var height = parseInt(document.getElementById("height").value, 10);
 		var num_bombs = parseInt(document.getElementById("num_bombs").value, 10);
@@ -1016,3 +1030,10 @@ function help() {
 
 	alert(help_text)
 }
+
+function resize() {
+	gui.resize()
+	gui.render_region()
+}
+
+window.onresize = resize;

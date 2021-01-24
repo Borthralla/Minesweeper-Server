@@ -1,0 +1,28 @@
+.menu {
+	position: absolute;
+	top: 0px;
+	height: 30px;
+	display: flex;
+	vertical-align: middle;
+	align-items: center;
+}
+
+textarea {
+	vertical-align: middle;
+}
+
+#game {
+	position: absolute;
+	left: 0;
+	top: 30px;
+}
+
+#minimap {
+	position: absolute;
+	right: 0px;
+	top: 30px;
+}
+
+html { 
+	overflow: hidden; 
+}
