@@ -11,7 +11,16 @@ import (
 	"math/rand"
 	"time"
 	"sync"
+	"github.com/fsnotify/fsnotify"
+	"io/ioutil"
 )
+
+type ServerConfig struct {
+	Width int32
+	Height int32
+	Bombs int32
+	Etag string
+}
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -35,6 +44,48 @@ type Board struct {
 type Stack struct {
 	Values []int32
 	Length int32
+}
+
+func load_config(config *ServerConfig)  {
+	content, err := ioutil.ReadFile("config.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = json.Unmarshal(content, config)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Loaded config", config)
+}
+
+func handle_fs_events(watcher *fsnotify.Watcher, config *ServerConfig) {
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				log.Println("fsnotify channel closed for some reason")
+				return
+			}
+			if event.Op & fsnotify.Write == fsnotify.Write {
+				load_config(config)
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				log.Println("fsnotify error channel closed for some reason")
+				return
+			}
+			log.Println("error:", err)
+		}
+	}
+}
+
+func watch_for_config_changes(config *ServerConfig) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+	watcher.Add("config.json")
+	go handle_fs_events(watcher, config)
 }
 
 func make_stack(capacity int32) Stack {
@@ -82,14 +133,17 @@ func get_board_json(board Board) []byte {
 	return b
 }
 
-var board = make_board(750,750,112500)
-var board_json = get_board_json(board)
+var config ServerConfig
+var board Board
+var board_json []byte
 var player_count = make(chan int16, 1)
 var mutex = &sync.Mutex{}
 var player_positions = make([]float32, 10000)
 var num_players = int32(0)
 var open_player_indices = make_stack(10000)
 var player_state_mutex = &sync.Mutex{}
+var fileserver = http.FileServer(http.Dir("./html"))
+
 
 func read_reveals(conn *websocket.Conn, player_index int16, player_pos_index *int32, afk *bool) {
 	defer remove_player(player_pos_index)
@@ -270,7 +324,6 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	player_count <- player_index + 1
 	var player_pos_index = add_player()
 	var afk = false
-
 	go read_reveals(conn, player_index, &player_pos_index, &afk);
 	go send_reveals(conn, player_index, &player_pos_index, &afk);
 }
@@ -281,10 +334,25 @@ func serveBoard(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(board_json)
 }
+ 
+func ServeFilesWithEtags(w http.ResponseWriter, r *http.Request) {
+	request_etag , ok := r.Header["If-None-Match"]
+	if ok && request_etag[0] == config.Etag {
+		w.WriteHeader(304)
+		return
+	}
+	w.Header().Set("ETag", config.Etag)
+	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+	fileserver.ServeHTTP(w, r)
+}
 
 func main() {
+	load_config(&config)
+	watch_for_config_changes(&config)
 	player_count <- int16(0)
-	http.Handle("/", http.FileServer(http.Dir("./html")))
+	board = make_board(config.Width,config.Height,config.Bombs)
+	board_json = get_board_json(board)
+	http.HandleFunc("/", ServeFilesWithEtags)
 	http.HandleFunc("/ws", serveWs)
 	http.HandleFunc("/board", serveBoard)
 	err := http.ListenAndServe(":80", nil)

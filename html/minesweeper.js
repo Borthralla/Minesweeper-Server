@@ -623,7 +623,13 @@ class Gui {
 		await this.load_images()
 	}
 
-	resize() {
+	resize(new_tile_size=null) {
+		if (new_tile_size) {
+			var multiplier = new_tile_size / this.tile_size
+			this.current_x *= multiplier
+			this.current_y *= multiplier
+			this.tile_size = new_tile_size
+		}
 		this.window_width = Math.ceil(window.innerWidth / this.tile_size)
 		this.window_height = Math.ceil((window.innerHeight - 30) / this.tile_size)
 		this.canvas.width = this.window_width * this.tile_size;
@@ -910,8 +916,8 @@ class Gui {
 	}
 
 	apply() {
-		this.tile_size = parseInt(document.getElementById("tile_size").value, 10);
-		this.resize();
+		var new_tile_size = parseInt(document.getElementById("tile_size").value, 10);
+		this.resize(new_tile_size);
 		this.load_images().then(() => {this.render_region();})
 		
 	}
@@ -948,7 +954,7 @@ class Gui {
 		}
 		var message_data = new ArrayBuffer((4 + reveal_delta + flag_delta) * 4)
 		var message = new DataView(message_data)
-		console.log("positions: ", x, y)
+		//console.log("positions: ", x, y)
 		message.setFloat32(0, x)
 		message.setFloat32(4, y)
 		message.setInt32(8, reveal_delta)
@@ -966,7 +972,7 @@ class Gui {
 		conn.send(message)
 		this.reveal_index = this.board.reveal_history.length;
 		this.flag_index = this.board.flag_history.length;
-		console.log("sending message:", message)
+		//console.log("sending message:", message)
 	}
 
 }
