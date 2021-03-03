@@ -3,13 +3,16 @@
 <head>
     <meta charset="utf-8" />
     <title>Mega Minesweeper</title>
+    <link href="style.css" rel="stylesheet">
 </head>
 <body ondragstart="return false;" ondrop="return false;">
-<label for="tile_size"> tile size </label>
-
-<textarea id="tile_size" name="tile_size" rows="1" colrs="3">30</textarea>
-<button onclick="apply()">apply</button><br>
-<canvas id="myCanvas" width="1920" height="1080" oncontextmenu="return false" unselectable="on"></canvas>
+<div class="menu">
+	<label for="tile_size"> Tile size: </label>
+	<textarea id="tile_size" name="tile_size" rows="1" cols="3">30</textarea>
+	<button onclick="apply()">apply</button>
+	<button onclick="help()">Controls</button>
+</div>
+<canvas id="game" width="1920" height="1080" oncontextmenu="return false" unselectable="on"></canvas>
 <canvas id="minimap" width="250" height="250" oncontextmenu="return false"></canvas>
 
 <script src="minesweeper.js"></script>

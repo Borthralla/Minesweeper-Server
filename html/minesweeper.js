@@ -136,6 +136,7 @@ class Board {
 			return;
 		}
 		revealed_tile.reveal();
+		this.draw_tile_in_bounds(revealed_tile)
 		if (revealed_tile.is_bomb) {
 			this.status = "lose";
 			this.bombs_left -= 1;
@@ -167,6 +168,7 @@ class Board {
 								to_reveal.push(tile);
 							}
 							tile.reveal();
+							this.draw_tile_in_bounds(tile)
 							this.reveal_history.push(tile.index)
 							this.tiles_left -= 1;
 						}
@@ -234,6 +236,7 @@ class Board {
 			}
 			this.bombs_left -= 1;
 		}
+		this.draw_tile_in_bounds(tile)
 	}
 
 	
@@ -272,9 +275,21 @@ class Board {
 	//width and height are the number of cells to draw in the region
 	//x and y denote where to draw the upper left cell. Note that these usually will be negative (a bit cut off).
 	//hover warning tiles are the tiles that the user is about to click or chord. If click, its one thing, if chord a list
-	render_region(ctx, tile_size, colors, row, col, width, height, x, y, hover_warning_tiles) {
-		for (var r = 0; r <  height; r++) {
-			for (var c = 0; c < width; c++) {
+	render_region(ctx, tile_size, colors, row, col, start_row, end_row, start_col, end_col, x, y, hover_warning_tiles) {
+		if (start_row > 0) {
+			ctx.fillRect(0, 0,this.gui.window_width * tile_size, start_row * tile_size)
+		}
+		if (end_row <= this.gui.window_height) {
+			ctx.fillRect(0, tile_size * end_row + y, this.gui.window_width * tile_size, tile_size * (this.gui.window_height - end_row) - y)
+		}
+		if (start_col > 0) {
+			ctx.fillRect(0, 0, tile_size * start_col, this.gui.window_height * tile_size)
+		}
+		if (end_col <= this.gui.window_width) {
+			ctx.fillRect(tile_size * end_col + x, 0, tile_size * (this.gui.window_width - end_col) - x, tile_size * this.gui.window_height)
+		}
+		for (var r = start_row; r <  end_row; r++) {
+			for (var c = start_col; c < end_col; c++) {
 				var current_row = row + r;
 				var current_col = col + c;
 				var index = this.width * current_row + current_col;
@@ -283,6 +298,21 @@ class Board {
 				var tile_y = tile_size * r + y;
 				this.draw_tile(tile, ctx, tile_size, tile_x, tile_y, colors, hover_warning_tiles);
 			}
+		}
+	}
+
+	fast_render_region(ctx, tile_size, colors, row, col, x, y, hover_warning_tiles, prev_hover_warning_tiles) {
+		for (var prev_hover_tile of prev_hover_warning_tiles) {
+			if (!hover_warning_tiles.includes(prev_hover_tile)) {
+				var tile_x = ((prev_hover_tile.index % this.width) - col) * tile_size + x
+				var tile_y = (Math.floor((prev_hover_tile.index / this.width)) - row) * tile_size + y
+				this.draw_tile(prev_hover_tile, ctx, tile_size, tile_x, tile_y, colors, hover_warning_tiles);
+			}
+		}
+		for (var hover_tile of hover_warning_tiles) {
+			var tile_x = ((hover_tile.index % this.width) - col) * tile_size + x
+			var tile_y = (Math.floor((hover_tile.index / this.width)) - row) * tile_size + y
+			this.draw_tile(hover_tile, ctx, tile_size, tile_x, tile_y, colors, hover_warning_tiles);
 		}
 	}
 
@@ -310,6 +340,25 @@ class Board {
 		else {
 			this.draw_number(tile, ctx, tile_size, x, y, colors);
 		}
+	}
+
+	draw_tile_in_bounds(tile) {
+		var tile_size = this.gui.tile_size
+		var row = Math.floor(this.gui.current_y / tile_size);
+		var col = Math.floor(this.gui.current_x / tile_size);
+		var x = tile_size * col - this.gui.current_x;
+		var y = tile_size * row - this.gui.current_y;
+		var tile_col = tile.index % this.width
+		if (tile_col < col || tile_col > (col + this.gui.window_width + 1)) {
+			return
+		}
+		var tile_row = Math.floor(tile.index / this.width)
+		if (tile_row < row || tile.row > (row + this.gui.window_height + 1)) {
+			return
+		}
+		var tile_x = (tile_col - col) * tile_size + x
+		var tile_y = (tile_row - row) * tile_size + y
+		this.draw_tile(tile, this.gui.ctx, tile_size, tile_x, tile_y, this.gui.colors, []);
 	}
 
 
@@ -433,13 +482,24 @@ class Minimap {
 
 	change_position(event) {
 		var rect = this.canvas.getBoundingClientRect();
-    	var x = event.clientX - rect.left - Math.floor(this.gui.window_width / (2 * this.region_width))
-    	var y = event.clientY - rect.top - Math.floor(this.gui.window_height / (2 * this.region_height))
+    	var x = event.clientX - rect.left// - Math.floor(this.gui.window_width / (2 * this.region_width))
+    	var y = event.clientY - rect.top// - Math.floor(this.gui.window_height / (2 * this.region_height))
     	if (x < -1 || x >= this.width || y < -1 || y >= this.height) {
     		return false
     	}
 
-    	this.gui.update_position(this.gui.tile_size * this.region_width * x, this.gui.tile_size * this.region_height * y)
+    	this.gui.update_position(this.gui.tile_size * ( this.region_width * x - Math.floor(this.gui.window_width / 2)), 
+    		this.gui.tile_size * ( this.region_height * y - Math.ceil(this.gui.window_height / 2)))
+    	return true
+	}
+
+	in_bounds(event) {
+		var rect = this.canvas.getBoundingClientRect();
+    	var x = event.clientX - rect.left// - Math.floor(this.gui.window_width / (2 * this.region_width))
+    	var y = event.clientY - rect.top// - Math.floor(this.gui.window_height / (2 * this.region_height))
+    	if (x < -1 || x >= this.width || y < -1 || y >= this.height) {
+    		return false
+    	}
     	return true
 	}
 
@@ -457,6 +517,18 @@ class Minimap {
 		this.background_minimap_ctx.fillRect(0,0,this.width,this.height)
 	}
 
+	draw_players() {
+		var ctx = this.canvas.getContext("2d");
+		ctx.fillStyle = "#ff1493"
+		for (var i = 0; i < this.gui.player_positions.length / 2; i++) {
+			var x = Math.floor(this.gui.player_positions[2 * i] / this.region_width)
+			var y = Math.floor(this.gui.player_positions[2 * i + 1] / this.region_height)
+			if (x >= 0) {
+				ctx.fillRect(x, y, 2, 2)
+			}
+		}
+	}
+
 	render() {
 		var ctx = this.canvas.getContext("2d");
 		ctx.drawImage(this.background_minimap, 0, 0)
@@ -466,12 +538,14 @@ class Minimap {
 		var mini_height_length = Math.floor(this.gui.window_height / this.region_height)
 		ctx.strokeStyle = "#ff0000"
 		ctx.strokeRect(mini_pos_x, mini_pos_y, mini_width_length, mini_height_length)
+		this.draw_players()
 	}
 }
 
 class Gui {
 	constructor() {
-		this.canvas = document.getElementById("myCanvas");
+		this.canvas = document.getElementById("game");
+		this.ctx = this.canvas.getContext("2d", { alpha: false });
 		var width = 0;
 		var height = 0;
 		var num_bombs = 0;
@@ -495,7 +569,8 @@ class Gui {
 		this.flag_index = 0;
 		this.left_mouse_down = false;
 		this.right_mouse_down = false;
-		this.render_callback = this.render_region.bind(this)
+		this.player_positions = []
+		this.prev_hover_warning_tiles = []
 	}
 
 	async load_board() {
@@ -505,6 +580,7 @@ class Gui {
 		this.height = board_data["Height"]
 		this.num_bombs = board_data["Bombs"].length
 		this.board = new Board(this.width, this.height, this.num_bombs)
+		this.board.gui = this
 		this.board.assign_bombs_with_indices(board_data["Bombs"])
 		this.minimap = new Minimap(this)
 		this.minimap.count_bombs(board_data["Bombs"])
@@ -547,7 +623,15 @@ class Gui {
 		await this.load_images()
 	}
 
-	resize() {
+	resize(new_tile_size=null) {
+		if (new_tile_size) {
+			var multiplier = new_tile_size / this.tile_size
+			this.current_x *= multiplier
+			this.current_y *= multiplier
+			this.tile_size = new_tile_size
+		}
+		this.window_width = Math.ceil(window.innerWidth / this.tile_size)
+		this.window_height = Math.ceil((window.innerHeight - 30) / this.tile_size)
 		this.canvas.width = this.window_width * this.tile_size;
 		this.canvas.height = this.window_height * this.tile_size;
 	}
@@ -567,9 +651,19 @@ class Gui {
 		return row * this.board.width + col
 	}
 
+	//Supplies tile-normalized x and y coordinates. ex. 3.2 tiles right, 9.5 tiles down
+	tile_normalized_coord() {
+		var rect = this.canvas.getBoundingClientRect();
+		var x = this.cursor_x - rect.left + this.current_x;
+		var y = this.cursor_y - rect.top + this.current_y;
+		var row = y / this.tile_size;
+		var col = x / this.tile_size;
+		return [col, row]
+	}
+
 	//Tiles that need to be warned
 	hover_warning_tiles() {
-		if (!this.left_mouse_down) {
+		if (!this.left_mouse_down || this.is_dragging) {
 			return []
 		}
 		var hovered_tile = this.hovered_tile()
@@ -583,20 +677,86 @@ class Gui {
 		
 	}
 
+	draw_triangle(x, y) {
+		this.ctx.beginPath()
+		this.ctx.moveTo(x, y)
+		this.ctx.lineTo(x, y + 15)
+		this.ctx.lineTo(x + 10, y + 10)
+		this.ctx.fill()
+	}
+
+	draw_player(x, y) {
+		this.ctx.fillStyle = "#663399"
+		this.draw_triangle(x,y)
+	}
+
+	player_in_bounds(x, y) {
+		var right_bound = this.current_x + (this.window_width + 1) * this.tile_size
+		var bottom_bound = this.current_y + (this.window_height + 1) * this.tile_size
+		if (x < 0 || y < 0 || x > this.board.width * this.tile_size || y > this.board.height * this.tile_size) {
+			return false
+		}
+		return x >= this.current_x && x <= right_bound && y >= this.current_y && y <= bottom_bound
+	}
+
+	push_if_absent(array, element) {
+		if (!array.includes(element)) {
+			array.push(element)
+		}
+	}
+
+	render_players() {
+		for (var i = 0; i < this.player_positions.length / 2; i++) {
+			var x = Math.floor(this.player_positions[2 * i] * this.tile_size)
+			var y = Math.floor(this.player_positions[2 * i + 1] * this.tile_size)
+			if (this.player_in_bounds(x, y)) {
+				this.draw_player(x - this.current_x, y - this.current_y)
+				// Add to the tiles to be re-rendered during fast mode so player gets cleared
+				var col = Math.floor(this.player_positions[2 * i])
+				var row = Math.floor(this.player_positions[2 * i + 1])
+				var index = col + this.board.width * row
+				this.push_if_absent(this.prev_hover_warning_tiles, this.board.tiles[index])
+				if (col != this.board.width - 1) {
+					this.push_if_absent(this.prev_hover_warning_tiles, this.board.tiles[index + 1])
+					if (row != this.board.height - 1) {
+						this.push_if_absent(this.prev_hover_warning_tiles, this.board.tiles[index +this.board.width + 1])
+					}
+				}
+				if (row != this.board.height - 1) {
+					this.push_if_absent(this.prev_hover_warning_tiles, this.board.tiles[index +this.board.width])
+				}
+			}
+		}
+	}
 
 
 	render_region() {
 		//render_region(ctx, tile_size, colors, row, col, width, height, x, y) {
-		var ctx = this.canvas.getContext("2d", { alpha: false });
 		var row = Math.floor(this.current_y / this.tile_size);
 		var col = Math.floor(this.current_x / this.tile_size);
 		var x = this.tile_size * col - this.current_x;
 		var y = this.tile_size * row - this.current_y;
-		var width_to_draw = this.current_x >= this.tile_size * (this.board.width - this.window_width) ? this.window_width : this.window_width + 1;
-		var height_to_draw = this.current_y >= this.tile_size * (this.board.height - this.window_height) ? this.window_height : this.window_height + 1;
+		var start_row = row >= 0 ? 0 : row * -1
+		var end_row = row < this.board.height - this.window_height ? this.window_height + 1 : this.board.height - row
+		var start_col = col >= 0 ? 0 : col * -1
+		var end_col = col < this.board.width - this.window_width ? this.window_width + 1 : this.board.width - col
 
-		this.board.render_region(ctx, this.tile_size, this.colors, row, col, width_to_draw, height_to_draw, x, y, this.hover_warning_tiles())
+		this.ctx.fillStyle = "#000000"
+		this.board.render_region(this.ctx, this.tile_size, this.colors, row, col, start_row, end_row, start_col, end_col, x, y, this.hover_warning_tiles())
 		this.minimap.render()
+		this.render_players(x, y)
+	}
+
+	render_static_region() {
+		var row = Math.floor(this.current_y / this.tile_size);
+		var col = Math.floor(this.current_x / this.tile_size);
+		var x = this.tile_size * col - this.current_x;
+		var y = this.tile_size * row - this.current_y;
+		var hover_warning_tiles = this.hover_warning_tiles()
+		this.board.fast_render_region(this.ctx, this.tile_size, this.colors, row, col, x, y, hover_warning_tiles, this.prev_hover_warning_tiles)
+		this.prev_hover_warning_tiles = hover_warning_tiles
+		this.minimap.render()
+		this.render_players(x, y)
 	}
 
 	on_click(event) {
@@ -612,7 +772,6 @@ class Gui {
 			return;
 		}
 		else {
-			var ctx = this.canvas.getContext("2d", { alpha: false });
 			var button = event.which
 			var index = row * this.board.width + col
 			if (button == 1) {
@@ -620,7 +779,8 @@ class Gui {
 			}
 			if (button == 1 || button == 2) {
 				var clicked_tile = this.board.tiles[index];
-				if (event.shiftKey || button == 2 || (!clicked_tile.is_covered && clicked_tile.number == 0)) {
+				if (event.shiftKey || button == 2) {
+					event.preventDefault()
 					this.is_dragging = true;
 					this.anchor_x = event.x;
 					this.anchor_y = event.y;
@@ -639,26 +799,29 @@ class Gui {
 				this.right_mouse_down = true
 				if (!this.left_mouse_down) {
 					this.board.flag(index);
-					console.log(this.board.bombs_left);
 				}	
 			}
 		}
-		window.requestAnimationFrame(this.render_callback);
+		this.render_static_region()
 	}
 
-	in_bounds(event) {
+	in_bounds(x, y) {
 		var rect = this.canvas.getBoundingClientRect();
-		return event.x >= rect.left && event.x <= rect.right && event.y >= rect.top && event.y <= rect.bottom
+		return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
 	}
 
 	on_mouse_up(event) {
+		var was_dragging = this.is_dragging || this.minimap.dragging
 		this.is_dragging = false;
 		this.minimap.dragging = false
 		var button = event.which
+		if (this.minimap.in_bounds(event)) {
+			return
+		}
 		if (button == 1) {
 			this.left_mouse_down = false
-			if (event.shiftKey || !this.in_bounds(event)) {
-				window.requestAnimationFrame(this.render_callback);
+			if (event.shiftKey || was_dragging || !this.in_bounds(event.x, event.y)) {
+				this.render_region();
 				return
 			}
 			var clicked_tile = this.board.tiles[this.hovered_tile()]
@@ -668,7 +831,7 @@ class Gui {
 			else if (this.right_mouse_down) {
 				this.board.chord(clicked_tile.index);
 			}
-			window.requestAnimationFrame(this.render_callback);
+			this.render_static_region()
 		}
 		if (button == 3) {
 			this.right_mouse_down = false
@@ -676,7 +839,7 @@ class Gui {
 				var clicked_tile = this.board.tiles[this.hovered_tile()]
 				if (!clicked_tile.is_covered) {
 					this.board.chord(clicked_tile.index);
-					window.requestAnimationFrame(this.render_callback);
+					this.render_static_region()
 				}
 			}
 		}
@@ -689,7 +852,7 @@ class Gui {
 		if (!this.is_dragging) {
 			this.minimap.on_mouse_move(event)
 			if (this.left_mouse_down) {
-				window.requestAnimationFrame(this.render_callback);
+				this.render_static_region();
 			}
 			return;
 		}
@@ -701,6 +864,9 @@ class Gui {
 	}
 
 	update_position(new_x, new_y) {
+		this.current_x = new_x
+		this.current_y = new_y
+		/*
 		var x_max = this.tile_size * (this.board.width - this.window_width)
 		var y_max = this.tile_size * (this.board.height - this.window_height)
 		if (new_x <= 0) {
@@ -721,11 +887,12 @@ class Gui {
 		else {
 			this.current_y = new_y
 		}
-		window.requestAnimationFrame(this.render_callback);
+		*/
+		this.render_region();
 	}
 
 	reset() {
-		this.canvas = document.getElementById("myCanvas");
+		this.canvas = document.getElementById("game");
 		var width = parseInt(document.getElementById("width").value, 10);
 		var height = parseInt(document.getElementById("height").value, 10);
 		var num_bombs = parseInt(document.getElementById("num_bombs").value, 10);
@@ -749,9 +916,9 @@ class Gui {
 	}
 
 	apply() {
-		this.tile_size = parseInt(document.getElementById("tile_size").value, 10);
-		this.resize();
-		this.load_images().then(() => {window.requestAnimationFrame(this.render_callback);})
+		var new_tile_size = parseInt(document.getElementById("tile_size").value, 10);
+		this.resize(new_tile_size);
+		this.load_images().then(() => {this.render_region();})
 		
 	}
 
@@ -775,39 +942,40 @@ class Gui {
 			var new_y = this.current_y + 5 * this.tile_size;
 			this.update_position(this.current_x, new_y)
 		}
-		window.requestAnimationFrame(this.render_callback);
+		this.render_region();
 	}
 
 	send_data(conn) {
 		var reveal_delta = this.board.reveal_history.length - this.reveal_index
 		var flag_delta = this.board.flag_history.length - this.flag_index
-		if (reveal_delta + flag_delta > 0 && reveal_delta + flag_delta < 3000) {
-			var message = new Int32Array(reveal_delta + flag_delta + 1)
-			for (var i = this.reveal_index; i < this.board.reveal_history.length; i++) {
-				var revealed_index = this.board.reveal_history[i]
-				var revealed_tile = this.board.tiles[revealed_index]
-				if (revealed_tile.is_covered) {
-					conn.close()
-					return
-				}
-				message[i - this.reveal_index] = (revealed_index)
-				if (!revealed_tile.is_bomb) {
-					this.minimap.update_region(revealed_index)
-				}
-			}
-			message[reveal_delta] = 1000000000
-			for (var i = this.flag_index; i < this.board.flag_history.length; i++) {
-				message[i - this.flag_index + reveal_delta + 1] = (this.board.flag_history[i])
-				//this.minimap.update_region(this.board.flag_history[i])
-			}
-			conn.send(message)
-			this.reveal_index = this.board.reveal_history.length;
-			this.flag_index = this.board.flag_history.length;
+		var [x, y] = gui.tile_normalized_coord()
+		if (!gui.in_bounds(gui.cursor_x, gui.cursor_y)) {
+			return
 		}
+		var message_data = new ArrayBuffer((4 + reveal_delta + flag_delta) * 4)
+		var message = new DataView(message_data)
+		//console.log("positions: ", x, y)
+		message.setFloat32(0, x)
+		message.setFloat32(4, y)
+		message.setInt32(8, reveal_delta)
+		message.setInt32(12, flag_delta)
+		var section_start = 4
+		for (var i = 0; i < reveal_delta; i++) {
+			var revealed_index = this.board.reveal_history[this.reveal_index + i]
+			message.setInt32((section_start + i) * 4, revealed_index)
+			this.minimap.update_region(revealed_index)
+		}
+		section_start += reveal_delta
+		for (var i = 0; i < flag_delta; i++) {
+			message.setInt32((section_start + i) * 4, this.board.flag_history[this.flag_index + i])
+		}
+		conn.send(message)
+		this.reveal_index = this.board.reveal_history.length;
+		this.flag_index = this.board.flag_history.length;
+		//console.log("sending message:", message)
 	}
 
 }
-
 
 
 var gui = new Gui();
@@ -818,37 +986,53 @@ function start_listening() {
 	document.addEventListener("mousemove", (event) => gui.on_mouse_move(event))
 	var conn = new WebSocket("ws://" + document.location.host + "/ws");
 	conn.binaryType = "arraybuffer";
-	setInterval(() => { gui.send_data(conn) }, 100)
+	setInterval(() => { gui.send_data(conn) }, 33)
+
+	function on_visibility_change() {
+		console.log("visibility has changed")
+		if (document.hidden) {
+			var buffer = new ArrayBuffer(4)
+			var message = new DataView(buffer)
+			message.setFloat32(0, -1)
+			console.log("tab is hidden, sending AFK message")
+			conn.send(message)
+		}
+	}
+
 	function recieve_data(event) {
-		var indices = new Int32Array(event.data)
-		console.log(indices.length)
-		var flag = false
-		for (var i = 0; i < indices.length; i++) {
-			var index = indices[i]
-			if (index == 1000000000) {
-				flag = true
-				continue
-			}
-			if (flag) {
-				var tile = gui.board.tiles[index]
-				if (!tile.is_flagged) {
-					tile.is_flagged = true
-					//gui.minimap.update_region(index)
-				}
-			}
-			else {
-				var tile = gui.board.tiles[index]
-				if (tile.is_covered) {
-					tile.reveal()
-					if (!tile.is_bomb) {
-						gui.minimap.update_region(index)
-					}
-				}
+		var message = new DataView(event.data)
+		num_players = message.getInt32(0)
+		num_reveals = message.getInt32(4)
+		num_flags = message.getInt32(8)
+		gui.player_positions.length = num_players * 2
+		var section_start = 3
+		for (var i = 0; i < num_players; i++) {
+			gui.player_positions[2 * i] = message.getFloat32(4 * (section_start + (2 * i)))
+			gui.player_positions[2 * i + 1] = message.getFloat32(4 * (section_start + (2 * i + 1)))
+		}
+		section_start += num_players * 2
+		for (var i = section_start; i < num_reveals + section_start; i++) {
+			var index = message.getInt32(i * 4)
+			var tile = gui.board.tiles[index]
+			if (tile && tile.is_covered) {
+				tile.reveal()
+				gui.board.draw_tile_in_bounds(tile)
+				gui.minimap.update_region(index)
 			}
 		}
-		window.requestAnimationFrame(gui.render_callback);
+		section_start += num_reveals
+		for (var i = section_start; i < num_flags + section_start; i++) {
+			var index = message.getInt32(i * 4)
+			var tile = gui.board.tiles[index]
+			if (tile && !tile.is_flagged) {
+				tile.is_flagged = true
+				gui.board.draw_tile_in_bounds(tile)
+			}
+		}
+		gui.render_static_region()
 	}
 	conn.addEventListener('message', recieve_data);
+	document.addEventListener("visibilitychange", on_visibility_change)
 	gui.render_region()	
 }
 gui.load_board_and_images().then(() => { start_listening() })
@@ -863,3 +1047,21 @@ function reset() {
 function apply() {
 	gui.apply()
 }
+
+var help_text = `Shift click or middle click and drag to move around
+Click the minimap to move long distances
+Left click to reveal
+Right click to flag
+Left + Right click to chord`
+
+function help() {
+
+	alert(help_text)
+}
+
+function resize() {
+	gui.resize()
+	gui.render_region()
+}
+
+window.onresize = resize;
