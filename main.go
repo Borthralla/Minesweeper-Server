@@ -40,6 +40,14 @@ type Board struct {
 	flag_history []Board_Event
 }
 
+type SerializedBoard struct {
+	Width int32
+	Height int32
+	Bombs []int32
+	Revealed []int32
+	Flagged []int32
+}
+
 // I have no idea why Go doesn't have a pop() function its stupid
 type Stack struct {
 	Values []int32
@@ -144,6 +152,33 @@ var open_player_indices = make_stack(10000)
 var player_state_mutex = &sync.Mutex{}
 var fileserver = http.FileServer(http.Dir("./html"))
 
+func load_or_create_board(board *Board) Board {
+	board_data, err := ioutil.ReadFile("board.json")
+	if err != nil {
+		return make_board(config.Width,config.Height,config.Bombs)
+	}
+	//fmt.Println(board_data)
+	var serialized_board SerializedBoard
+	json.Unmarshal(board_data, &serialized_board)
+	return make_board_from_serialized_board(&serialized_board)
+}
+
+func make_board_from_serialized_board(serialized_board *SerializedBoard) Board {
+	fmt.Println("Creating board from serialized board")
+	var width = serialized_board.Width
+	var height = serialized_board.Height
+	fmt.Println(width, height)
+	var result = Board{width, height, serialized_board.Bombs, make([]Board_Event, len(serialized_board.Revealed), width * height * 2), make([]Board_Event, len(serialized_board.Flagged), width * height / 2)}
+	for i := 0; i < len(serialized_board.Revealed); i++ {
+		index := serialized_board.Revealed[i]
+		result.revealed_history[i] = Board_Event{index, int16(0)}
+	}
+	for i := 0; i < len(serialized_board.Flagged); i++ {
+		index := serialized_board.Flagged[i]
+		result.flag_history[i] = Board_Event{index, int16(0)}
+	}
+	return result
+}
 
 func read_reveals(conn *websocket.Conn, player_index int16, player_pos_index *int32, afk *bool) {
 	defer remove_player(player_pos_index)
@@ -349,9 +384,9 @@ func ServeFilesWithEtags(w http.ResponseWriter, r *http.Request) {
 func main() {
 	load_config(&config)
 	watch_for_config_changes(&config)
-	player_count <- int16(0)
-	board = make_board(config.Width,config.Height,config.Bombs)
+	board = load_or_create_board(&board)
 	board_json = get_board_json(board)
+	player_count <- int16(0)
 	http.HandleFunc("/", ServeFilesWithEtags)
 	http.HandleFunc("/ws", serveWs)
 	http.HandleFunc("/board", serveBoard)
