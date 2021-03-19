@@ -2,5 +2,5 @@
 	"width": 1000,
 	"height": 1000,
 	"bombs": 200000,
-	"etag": "3/3/2021 Resize doesn't shift your position"
+	"etag": "3/3/2021 Load all images at once"
 }

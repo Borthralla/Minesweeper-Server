@@ -610,12 +610,12 @@ class Gui {
 		var images = []
 		for (var i = 0; i <= 8; i++) {
 			let file_path = "images/" + i.toString() + ".png"
-			images.push(await this.load_image(file_path))
+			images.push(this.load_image(file_path))
 		}
-		images.push(await this.load_image("images/bomb.png"))
-		images.push(await this.load_image("images/facingDown.png"))
-		images.push(await this.load_image("images/flagged.png"))
-		this.colors = images;
+		images.push(this.load_image("images/bomb.png"))
+		images.push(this.load_image("images/facingDown.png"))
+		images.push(this.load_image("images/flagged.png"))
+		this.colors = await Promise.all(images);
 	}
 
 	async load_board_and_images() {
