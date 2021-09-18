@@ -53,7 +53,7 @@ func load_config(config *ServerConfig)  {
 	}
 	err = json.Unmarshal(content, config)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err, content)
 	}
 	log.Println("Loaded config", config)
 }
@@ -147,6 +147,7 @@ var fileserver = http.FileServer(http.Dir("./html"))
 
 func read_reveals(conn *websocket.Conn, player_index int16, player_pos_index *int32, afk *bool) {
 	defer remove_player(player_pos_index)
+	defer conn.Close()
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
@@ -231,6 +232,7 @@ func read_reveals(conn *websocket.Conn, player_index int16, player_pos_index *in
 func send_reveals(conn *websocket.Conn, player_index int16, player_pos_index *int32, afk *bool) {
 	ticker := time.NewTicker(33 * time.Millisecond)
 	defer ticker.Stop()
+	defer conn.Close()
 	var reveal_index = 0
 	var flag_index = 0
 	for {

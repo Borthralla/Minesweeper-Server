@@ -949,7 +949,7 @@ class Gui {
 		var reveal_delta = this.board.reveal_history.length - this.reveal_index
 		var flag_delta = this.board.flag_history.length - this.flag_index
 		var [x, y] = gui.tile_normalized_coord()
-		if (!gui.in_bounds(gui.cursor_x, gui.cursor_y)) {
+		if (!gui.in_bounds(gui.cursor_x, gui.cursor_y) || x < 0) {
 			return
 		}
 		var message_data = new ArrayBuffer((4 + reveal_delta + flag_delta) * 4)
