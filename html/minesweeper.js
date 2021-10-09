@@ -592,7 +592,6 @@ class Gui {
 		if (window.chrome) {
 			return new Promise((resolve, reject) => {
 				image.onload = () => createImageBitmap(image, {resizeWidth: tile_size, resizeHeight: tile_size, resizeQuality: "high"}).then((bitmap) => {
-					console.log(bitmap)
 					resolve(bitmap)
 				})
 				image.src = image_path
