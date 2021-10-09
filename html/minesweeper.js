@@ -588,12 +588,21 @@ class Gui {
 
 	load_image(image_path) {
 		const image = new Image();
-		var offscreenCanvas = document.createElement('canvas');
-		offscreenCanvas.width = this.tile_size ;
-		offscreenCanvas.height = this.tile_size;
-		var ctx = offscreenCanvas.getContext("2d", { alpha: false });
 		var tile_size = this.tile_size
+		if (window.chrome) {
+			return new Promise((resolve, reject) => {
+				image.onload = () => createImageBitmap(image, {resizeWidth: tile_size, resizeHeight: tile_size, resizeQuality: "high"}).then((bitmap) => {
+					console.log(bitmap)
+					resolve(bitmap)
+				})
+				image.src = image_path
+			})
+		}
 		function on_load() {
+			var offscreenCanvas = document.createElement('canvas');
+			offscreenCanvas.width = tile_size ;
+			offscreenCanvas.height = tile_size;
+			var ctx = offscreenCanvas.getContext("2d", { alpha: false });
 			ctx.drawImage(image, 0, 0, tile_size, tile_size)
 			return offscreenCanvas;
 		}

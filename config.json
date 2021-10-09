@@ -2,5 +2,5 @@
 	"width": 1000,
 	"height": 1000,
 	"bombs": 222222,
-	"etag": "9/18/2021 Dont send message if out of bounds"
+	"etag": "10/09/2021 Fix chrome canvas performance"
 }
