@@ -901,10 +901,6 @@ class Gui {
 		this.render_region();
 	}
 
-	reset() {
-		
-	}
-
 	apply() {
 		var new_tile_size = parseInt(document.getElementById("tile_size").value, 10);
 		this.resize(new_tile_size);
@@ -1033,11 +1029,6 @@ function start_listening() {
 gui.load_board_and_images().then(() => { start_listening() })
 
 
-
-
-function reset() {
-	gui.reset();
-}
 
 function apply() {
 	gui.apply()
