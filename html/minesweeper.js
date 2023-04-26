@@ -584,6 +584,8 @@ class Gui {
 		this.board.assign_bombs_with_indices(board_data["Bombs"])
 		this.minimap = new Minimap(this)
 		this.minimap.count_bombs(board_data["Bombs"])
+		this.reveal_index = 0;
+		this.flag_index = 0;
 	} 
 
 	load_image(image_path) {
@@ -900,27 +902,7 @@ class Gui {
 	}
 
 	reset() {
-		this.canvas = document.getElementById("game");
-		var width = parseInt(document.getElementById("width").value, 10);
-		var height = parseInt(document.getElementById("height").value, 10);
-		var num_bombs = parseInt(document.getElementById("num_bombs").value, 10);
-		var tile_size = parseInt(document.getElementById("tile_size").value, 10);
-		this.board = new Board(width, height, num_bombs);
-		var old_tile_size = this.tile_size;
-		this.tile_size = tile_size;
-		this.resize();
-		this.first_click = true;
-		this.current_x = 0;
-		this.current_y = 0;
-		this.window_width = this.window_width;;
-		this.window_height = this.window_height;
-
-		if (old_tile_size != this.tile_size) {
-			gui.load_images().then(() => {gui.render() })
-		}
-		else{
-			this.render_region();
-		}
+		
 	}
 
 	apply() {
@@ -1010,6 +992,11 @@ function start_listening() {
 	function recieve_data(event) {
 		var message = new DataView(event.data)
 		num_players = message.getInt32(0)
+		// num_players less than 0 means this is a reset event
+		if (num_players < 0) {
+			gui.load_board().then(() => gui.render_region())
+			return
+		}
 		num_reveals = message.getInt32(4)
 		num_flags = message.getInt32(8)
 		gui.player_positions.length = num_players * 2

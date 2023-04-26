@@ -38,6 +38,7 @@ type Board struct {
 	Bombs []int32
 	revealed_history []Board_Event
 	flag_history []Board_Event
+	revealed_tiles []bool
 }
 
 // I have no idea why Go doesn't have a pop() function its stupid
@@ -120,8 +121,8 @@ func make_board(width int32, height int32, num_bombs int32) Board {
 	var bombs = indicies[0:num_bombs]
 
 	//fmt.Printf("%d\n", bombs)
-
-	var board = Board{width, height, bombs, make([]Board_Event, 0, width * height * 2), make([]Board_Event, 0, width * height / 2)}
+	//the boolean list already defaults to everything being false
+	var board = Board{width, height, bombs, make([]Board_Event, 0, width * height * 2), make([]Board_Event, 0, width * height / 2), make([]bool, width * height)}
 	return board
 }
 
@@ -133,9 +134,21 @@ func get_board_json(board Board) []byte {
 	return b
 }
 
+func check_complete(board Board) bool {
+	var total_revealed = int32(0)
+	for i := int32(0); i < board.Width * board.Height; i++ {
+		if (board.revealed_tiles[i]) {
+			total_revealed++
+		}
+	}
+	return total_revealed >= board.Width * board.Height - int32(len(board.Bombs))
+}
+
+
 var config ServerConfig
 var board Board
 var board_json []byte
+var game_id int32
 var player_count = make(chan int16, 1)
 var mutex = &sync.Mutex{}
 var player_positions = make([]float32, 10000)
@@ -145,7 +158,7 @@ var player_state_mutex = &sync.Mutex{}
 var fileserver = http.FileServer(http.Dir("./html"))
 
 
-func read_reveals(conn *websocket.Conn, player_index int16, player_pos_index *int32, afk *bool) {
+func read_reveals(conn *websocket.Conn, player_index int16, player_pos_index *int32, afk *bool, player_game_id *int32) {
 	defer remove_player(player_pos_index)
 	defer conn.Close()
 	for {
@@ -214,6 +227,7 @@ func read_reveals(conn *websocket.Conn, player_index int16, player_pos_index *in
 					return
 				}
 				board.revealed_history = append(board.revealed_history, Board_Event{data, player_index})
+				board.revealed_tiles[data] = true
 			}
 			
 			for i := int32(0); i< num_flags; i++ {
@@ -229,7 +243,7 @@ func read_reveals(conn *websocket.Conn, player_index int16, player_pos_index *in
 	}
 }
 
-func send_reveals(conn *websocket.Conn, player_index int16, player_pos_index *int32, afk *bool) {
+func send_reveals(conn *websocket.Conn, player_index int16, player_pos_index *int32, afk *bool, player_game_id *int32) {
 	ticker := time.NewTicker(33 * time.Millisecond)
 	defer ticker.Stop()
 	defer conn.Close()
@@ -237,14 +251,26 @@ func send_reveals(conn *websocket.Conn, player_index int16, player_pos_index *in
 	var flag_index = 0
 	for {
 		<- ticker.C
+		
 		if (*afk) {
+			continue
+		}
+		message, err := conn.NextWriter(websocket.BinaryMessage)
+		if (*player_game_id != game_id) {
+			reveal_index = 0;
+			flag_index = 0;
+			*player_game_id = game_id
+			binary.Write(message, binary.BigEndian, int32(-1))
+			if err := message.Close(); err != nil {
+				return
+			}
 			continue
 		}
 		reveal_total := len(board.revealed_history)
 		reveal_delta := reveal_total - reveal_index
 		flag_total := len(board.flag_history)
 		flag_delta := flag_total - flag_index
-		message, err := conn.NextWriter(websocket.BinaryMessage)
+		
 		if err != nil {
 			return
 		}
@@ -326,8 +352,9 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	player_count <- player_index + 1
 	var player_pos_index = add_player()
 	var afk = false
-	go read_reveals(conn, player_index, &player_pos_index, &afk);
-	go send_reveals(conn, player_index, &player_pos_index, &afk);
+	var player_game_id = game_id
+	go read_reveals(conn, player_index, &player_pos_index, &afk, &player_game_id);
+	go send_reveals(conn, player_index, &player_pos_index, &afk, &player_game_id);
 }
 
 
@@ -348,12 +375,33 @@ func ServeFilesWithEtags(w http.ResponseWriter, r *http.Request) {
 	fileserver.ServeHTTP(w, r)
 }
 
+func init_board() {
+	board = make_board(config.Width,config.Height,config.Bombs)
+	board_json = get_board_json(board)
+	game_id++
+}
+
+func auto_reset_on_completion() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		<- ticker.C
+		if (check_complete(board)) {
+			init_board()
+		}
+	}
+}
+
+//TODO: On the fly resets
+//Make board initialization method that can be called during runtime to reset the board state
+//Will need to reset the 
+
 func main() {
 	load_config(&config)
 	watch_for_config_changes(&config)
 	player_count <- int16(0)
-	board = make_board(config.Width,config.Height,config.Bombs)
-	board_json = get_board_json(board)
+	init_board()
+	go auto_reset_on_completion();
 	http.HandleFunc("/", ServeFilesWithEtags)
 	http.HandleFunc("/ws", serveWs)
 	http.HandleFunc("/board", serveBoard)
