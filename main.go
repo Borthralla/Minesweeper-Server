@@ -388,13 +388,10 @@ func auto_reset_on_completion() {
 		<- ticker.C
 		if (check_complete(board)) {
 			init_board()
+			log.Println("Starting new game: ", game_id)
 		}
 	}
 }
-
-//TODO: On the fly resets
-//Make board initialization method that can be called during runtime to reset the board state
-//Will need to reset the 
 
 func main() {
 	load_config(&config)
